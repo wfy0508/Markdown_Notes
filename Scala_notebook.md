@@ -1,8 +1,6 @@
-# Scala和Spark学习笔记
+# Scala编程
 
-## Scala编程
-
-### 一种可伸缩语言
+## 一种可伸缩语言
 
 1 定义Map类型变量
 
@@ -44,9 +42,9 @@ Scala是函数式的：
 
 - 另一个核心理念是方法不应该有`副作用`。方法只能通过接收参数和返回结果两种方式与外部环境通信，意思是对于任何特定的输入，该方法调用都可以被其他结果替换，同时不会影响程序的语义。
 
-### 2 Scala入门
+## 2 Scala入门
 
-#### 2.1 定义变量
+### 2.1 定义变量
 
 Scala的变量分为两种：var和val，val跟Java的final变量类似，初始化后就不能被重新赋值；而var则不同，类似于Java的非final变量，在整个生命周期之内都可以被重新赋值。
 
@@ -57,7 +55,7 @@ msg: String = Hello World!
 
 定义变量不用指定类型，Scala中的类型推断 (type inference) 能够推断出那些不显式执行的类型。
 
-#### 2.2 定义函数
+### 2.2 定义函数
 
 ```scala
 def max(x: Int, y:Int): Int = {
@@ -76,7 +74,7 @@ greet: ()Unit
 
 当你定义greet()函数时，解释器会以greet(): Unit作为响应。greet是函数的名称，空的圆括号代表该函数不接受任何参数，而Unit是greet返回的结果。`Unit这样的结果类型，表示该函数并不返回任何有意义的结果`。跟Java的void类型类似。
 
-#### 2.3 编写Scala脚本
+### 2.3 编写Scala脚本
 
 将下面的代码放入`hello.scala`的文件中
 
@@ -94,7 +92,7 @@ $scala hello.scala
 
 命令行参数可以通过名为args的Scala数组获取，Scala的数组下标从0开始，一个名为steps的数组，第一个元素为`steps(0)`，而Java的写法为`steps[0]`。
 
-#### 2.4 while循环，if判断
+### 2.4 while循环，if判断
 
 ```scala
 var i = 0
@@ -104,7 +102,7 @@ while (i < args.length) { //while或if中的boolean表达式必须在圆括号�
 }
 ```
 
-#### 2.5 用foreach和for遍历
+### 2.5 用foreach和for遍历
 
 ```scala
 args.foreach(arg => println(arg))
@@ -135,9 +133,9 @@ for (arg <- args) //arg是val类型，只能写成arg，不能写成val arg，<-
   println(arg)
 ```
 
-### 3 Scala入门（续）
+## 3 Scala入门（续）
 
-#### 3.1 用类型参数化数组
+### 3.1 用类型参数化数组
 
 用new来实例化对象或类的实例。当实例化对象时，可以用值和类型对其进行参数化（parameterize）。
 
@@ -172,7 +170,7 @@ Scala为什么使用圆括号来访问数组，跟Java相比，Scala的特例更
 val numNames = Array("zero", "one", "two")
 ```
 
-#### 3.3 使用列表
+### 3.3 使用列表
 
 ```scala
 val oneTwoThree = List(1, 2, 3) //不用写new List，因为scala.List的伴生对象上定义了一个工厂方法
@@ -201,7 +199,7 @@ val oneTwoThree = 1:: oneTwo
 val oneTwoThree = 1 :: 2 :: 3 :: Nil
 ```
 
-#### 3.4 使用元组
+### 3.4 使用元组
 
 另一个容易对象是元组（tuple），元组也是不可变的，跟List不同之处在于，元组中的元素类型可以不同。
 
@@ -215,7 +213,7 @@ Scala会推断出pair的类型为`Tuple2[Int, String]`，这里的“.”跟用�
 
 我们为什么不能使用pair(0)来访问元素？这是因为列表的apply方法永远只返回同一种类型，但元组中的类型可以不同，_1可以是一种类型，_2可能是另一种类型，_N表示的字段名从1开始而不是0。
 
-#### 3.5 使用集合和映射
+### 3.5 使用集合和映射
 
 Scala还提供了Set和Map的可变（mutable）与不可变（immutable）的不同选择。Scala的API包含了一个基础的特质（trait）来表示集，如下图，三个特质都叫做Set，但是他们完整的名称并不相同，因为他们位于不同的包。如果想要使用一个HashSet，可以根据需要选择可变或不可变的版本。
 
@@ -292,7 +290,7 @@ println(romanNumeral(4))
 
 如果直接使用数据初始化一个Map，[Int, String]不是必须的，因为此时编译器可以推断出变量的类型。
 
-#### 3.6 认识函数式编程
+### 3.6 认识函数式编程
 
 区别指令式编程和函数式编程的主要特征是，`代码中是否包含var变量`。函数式编程的代码中尽量或全部使用val变量。
 
@@ -333,7 +331,7 @@ def formatArgs(args: Array[String])=args.mkString("\n")
 
 没有副作用的函数，也就不能给外界提供有意义的值。所以在设计程序是要尽量少的产生副作用，这样你的程序更容易调试。
 
-#### 3.7 从文件读取记录行
+### 3.7 从文件读取记录行
 
 ```scala
 import scala.io.Source
@@ -346,7 +344,7 @@ else
   Console.err.println("Please enter fileName")
 ```
 
-### 4 类和对象
+## 4 类和对象
 
 定义一个Class
 
@@ -375,7 +373,7 @@ acc = new CheckSumAccumulator
 acc.sum = 3
 ```
 
-#### 4.1 定义私有变量
+### 4.1 定义私有变量
 
 ```scala
 class CheckSumAccumulator{
@@ -425,7 +423,7 @@ class CheckSumAccumulator{
 
 一个仅因其副作用而执行的方法称为过程(procedure)。类CheckSumAccumulator中的add方法，就是需要其执行之后的产生副作用。
 
-#### 4.2 分号推断
+### 4.2 分号推断
 
 在Scala中，如果一行有多个语句，需要中间有分号隔开
 
@@ -501,7 +499,7 @@ object CheckSumAccumulator{
 
 没有伴生类的单例对象，称为独立对象（standalone object）。
 
-#### 4.4 Scala应用
+### 4.4 Scala应用
 
 要运行一个.scala代码，需要定义main方法和它的参数Array[String]，Unit的返回类型。
 
@@ -540,7 +538,7 @@ scala Summer of love
 # love: -182
 ```
 
-#### 4.5 应用特质
+### 4.5 应用特质
 
 Scala提供了一种trait，可以节省部分代码的书写，如下
 
@@ -554,6 +552,229 @@ object FallWinterSpringSummer extends App{
 ```
 
 使用extends App可以替代main方法，你把原来放入main方法中的代码，放置其中即可。
+
+## 5 基本类型和操作符
+
+### 5.1 基本类型
+
+|基本类型|取值范围|
+|--|--|
+|Byte|8bit ($-2^{7}, 2^{7}-1$)|
+|Short|16bit ($-2^{15}, 2^{15}-1$)|
+|Int|32bit ($-2^{31}, 2^{31}-1$)|
+|Long|64bit ($-2^{63}, 2^{63}-1$)|
+|Char|16bit ($0, 2^{16}-1$)|
+|String|字符序列|
+|Float|32bit 单精度|
+|Double|64bit 双精度|
+|Boolean|true & false|
+
+Scala拥有与Java完全相同的类型，这使得编译器能够将Scala值类型(例如Int或Double)的实例转换为它生成的字节码中的Java基本类型。
+
+### 5.2 字面量
+
+#### 5.2.1 整数字面量
+
+```scala
+val hex = 0x5
+hex: Int = 5
+
+val hex2 = 0x00FF
+hex2: Int = 255
+
+val magic = 0xcafebabe
+magic: Int = -889275714
+```
+
+无论你定义的是几进制的整型数据，Scala shell总是以10进制打印整型值。如果整型字面量以L或l结尾，那么它就是Long类型，否则为Int类型。
+
+```scala
+scala> val prog = 0XCAFEBABEL
+prog: Long = 3405691582
+
+scala> val tower = 35L
+tower: Long = 35
+```
+
+如果将一个Int字面量赋给一个类型为Short或Byte的变量，那么只要该字面量在该类型的有效范围内，该字面量就被视为Short或Byte类型。
+
+#### 5.2.2 浮点型字面量
+
+```scala
+scala> val big = 1.2345
+big: Double = 1.2345
+
+scala> val bigger = 1.2345e1
+bigger: Double = 12.345
+
+scala> val biggerStill = 123E45
+biggerStill: Double = 1.23E47
+```
+
+如果字面量以F或f结尾，那么它就是Float类型，否则为Double类型，也可以在结尾加上D或者d，来代表Double类型。
+
+```scala
+scala> val little = 1.2345F
+little: Float = 1.2345
+
+scala> val littleBigger = 3e5f
+littleBigger: Float = 300000.0
+
+scala> val anotherDouble = 3e5
+anotherDouble: Double = 300000.0
+
+scala> val yetAnother = 3e5D
+yetAnother: Double = 300000.0
+```
+
+#### 5.2.3 字符字面量
+
+字符是由单引号之间的任何Unicode字符组成的。
+
+```scala
+scala> val a = 'A'
+a: Char = A
+
+scala> val d = '\u0041'
+d: Char = A
+
+scala> val f = '\u0044'
+f: Char = D
+```
+
+Unicode可以出现在程序的任何地方，比如
+
+```scala
+scala> val B\u0041\u0044 = 1
+BAD: Int = 1
+```
+
+最后，还有一些用特殊的转移序列表示的字面值
+
+```scala
+scala> val backslash = '\\'
+backslash: Char = \
+```
+
+|字面量|含义
+|--|--|
+|\n |换行 (\u000A)|
+|\b |退格 (\u0008)|
+|\t |制表符 (\u0009)|
+|\f |换页 (\u000C)|
+|\r |回车 (\u000D)|
+|\\" |双引号 (\u0022)|
+|\\' |单引号 (\u0027)|
+|\\\ |反斜杠 (\u005C)|
+
+#### 5.2.4 字符串字面量
+
+```scala
+scala> val hello = "hello"
+hello: String = hello
+```
+
+因为这种语法对于包含大量转义序列或跨多行字符串的字符串来说比较笨拙，所以Scala为原始字符串提供了一种特殊的语法。
+
+```scala
+println("""Welcome to Ultamix 3000. 
+           Type "HELP" for help.""")
+
+Welcome to Ultamix 3000.
+      Type "HELP" for help.
+```
+
+如果想要对齐，可以在每行之前加上`|`，会自动调用stripMargin。
+
+```scala
+println("""|Welcome to Ultamix 3000.
+           |Type "HELP" for help.""".stripMargin)
+
+Welcome to Ultamix 3000.
+Type "HELP" for help.
+```
+
+#### 5.2.5 符号字面量
+
+符号字面量通常被写为 `’ident`，**ident**可以使任何的字符或数字标识。这样的字面量被映射到预定义类scala.Symbol的实例中，具体来说，字面量`'cymbal`将由编译器扩展为工厂方法调用:Symbol("cymbal")。符号字面量通常用于动态语言场景中。比如，定义一个方法去更新数据库中的记录。
+
+```scala
+def updateRecordByName(r: Symbol, value: Any) = {
+   // code goes here
+}
+updateRecordByName: (Symbol,Any)Unit
+```
+
+该方法使用定义的两个参数，作为记录的字段名和要更新的值，在动态类型语言中，可以调用此操作，将未声明的字段标识符传递给方法。
+
+```scala
+scala> updateRecordByName(favoriteAlbum, "OK Computer")
+<console>:6: error: not found: value favoriteAlbum       updateRecordByName(favoriteAlbum, "OK Computer")
+ˆ
+Instead, and almost as concisely, you can pass a symbol literal:
+```
+
+但Scala中不能直接使用，要使用以下方式。
+
+```scala
+updateRecordByName('favoriteAlbum, "OK Computer")
+```
+
+对于一个符号，除了获取其名字，也没啥可操作的。
+
+```scala
+scala> val s = 'aSymbol
+s: Symbol = 'aSymbol
+
+scala> s.name
+res1: String = aSample
+```
+
+#### 5.2.6 布尔字面量
+
+```scala
+scala> val bool = true
+bool: Boolean = true
+
+scala> val fool = false
+fool: Boolean = false
+```
+
+### 5.3 字符串插值
+
+Scala提供了一种灵活的字符串插值机制，允许将字符串插入到文本中，它最常见的用例是提供一种简洁易读的字符串连接方法。
+
+```scala
+val name = "reader"
+println(s"Hello, $name!")
+
+Hello, reader
+```
+
+您可以将任何表达式放在经过处理的字符串文字中的美元符号($)之后，Scala将把第一个非标识符字符之前的所有字符解释为表达式
+
+```scala
+scala> s"The answer is ${6 * 7}."
+
+res0: String = The answer is 42.
+```
+
+Scala默认提供了另外两个字符串插入器，`raw`和`f`。`raw`类似于`s`，但它`不识转义字符`。
+
+```scala
+println(raw"No\\\\escape!")
+
+//会打印4个反斜杠，而不是两个。
+```
+
+`f`的作用相当于`printf`的作用，允许您将printf样式的格式化指令附加到嵌入的表达式中。
+
+```scala
+f"${math.Pi}%.5f"
+
+res5: String = 3.14159
+
+在Scala中，字符串插值在编译时会自动重写代码。编译器会将任何由一个标识符紧跟着一个字符串字面量的双引号组成的表达式视为一个字符串内插表达式。s、f和raw等字符串插值是通过这种通用机制实现的。库和用户可以为了其他目的，定义其他字符串插入器。
 
 ```scala
 class Rational(n: Int, d: Int){
