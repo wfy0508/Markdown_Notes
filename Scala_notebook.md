@@ -767,50 +767,336 @@ println(raw"No\\\\escape!")
 //会打印4个反斜杠，而不是两个。
 ```
 
-`f`的作用相当于`printf`的作用，允许您将printf样式的格式化指令附加到嵌入的表达式中。
+`f`允许给内嵌表达式加上`printf`风格的指令，需要将指令放在表达式之后。
 
 ```scala
 f"${math.Pi}%.5f"
 
 res5: String = 3.14159
+```
 
 在Scala中，字符串插值在编译时会自动重写代码。编译器会将任何由一个标识符紧跟着一个字符串字面量的双引号组成的表达式视为一个字符串内插表达式。s、f和raw等字符串插值是通过这种通用机制实现的。库和用户可以为了其他目的，定义其他字符串插入器。
 
+### 5.4 操作符即方法
+
+例如，`1+2`实际上跟`1.+(2)`是一回事。Int类中定义了一个名为+的方法，接受一个Int参数，返回Int的结果。
+
+```scala
+val sum = 1+ 2
+sum: Int = 3
+
+val sumMore = 1.+(2)
+sumMore: Int = 3
+```
+
+事实上，Int包含了多个`重载（overloaded）`的+方法，分别接收不同的参数。如接收一个Long，返回一个Long。+符号是一个操作符（更确切的叫中缀操作符）
+
+- 前缀操作符：需要将方法名放在你要调用的方法的对象前面，如”-7“中的“-”；
+- 中缀操作符：接收两个操作元，一左一右；
+- 后缀操作符：放在对象之后。
+
+前缀和中缀操作符类似，都是`一元的（unary）`，只接收一个操作元。
+
+跟中缀操作符类似，这些前缀操作符也是调用方法的一种简写。不同的是，方法名称是`“unary_”`加上操作符。
+
+```scala
+scala> -2.0
+res: Double = -2.0
+
+scala> (2.0)unary_-
+res: Double = -2.0
+
+//在使用unary_之前需要导入包：
+import scala.language.postfixOps
+```
+
+**`唯一被用作前缀操作符的是+、-、！和~`**。
+
+后缀操作符是那些不接收参数并且在调用时没有英文句点(.)圆括号的方法。在Scala中，可以将方法调用时省去空的圆括号。从约定俗成的角度讲，`如果方法有副作用的时候保留空的圆括号`，如println()；`而方法没有副作用时，则可以省略圆括号`.
+
+```scala
+scala> val s = "Hello, World"
+s: String = Hello, World
+
+scala> s.toLowerCase
+res4: String = hello, world
+```
+
+`在后一种不带参数的场景（无副作用）下，可以选择去掉句点，使用后缀操作符表示法`。
+
+```scala
+scala> s toLowerCase
+res4: String = hello, world
+```
+
+### 5.5 对象相等性
+
+比较连个对象是否相等，使用`==`和与之相反的`！=`。
+
+```scala
+scala> 1 == 2
+res6: Boolean = false
+
+scala> 1 != 2
+res7: Boolean = true
+
+scala> List(1, 2, 3) == List(1, 2, 3) //列表比较
+res8: Boolean = true
+
+scala> List(1, 2, 3) == List(2, 3, 4)
+res9: Boolean = false
+
+scala> 1 == 1.0
+res10: Boolean = true
+
+scala> List(1, 2, 3) == "hello" //不同类型也可比较
+res11: Boolean = false
+
+scala> List(1, 2, 3) == null //也可与null比较，不会报错
+res12: Boolean = false
+```
+
+**比较规则**：`首先检查作则是否为null，如果不为null，调用equals方法。由于equals是个方法，得到的确切比较逻辑取决于左侧的参数。`
+
+比较逻辑对于不同的对象，`只要他们的内容一致，且equals方法的实现也是基于内容的情况下，都会给出true的答案`。
+
+Scala与Java的不同，对于基本类型而言，==比较的是值的相等性，对于引用类型，比较的是引用的相等性（两个变量指向JVM的堆上同一个对象）。Scala也提供了比较引用的机制，即为`eq`方法。**`eq和其对应的ne只对那些直接映射到Java对象的对象有效`**。
+
+### 5.6 操作符优先级
+
+|操作符优先级|
+|--|
+|（所有其他操作符）|
+|* / %|
+|+ -|
+|:|
+|= !|
+|< >|
+|&|
+|^|
+|\||
+|(所有字母)|
+|(所有赋值操作符)|
+
+## 6 函数式对象
+
+### 6.1 构建Rational
+
+一个类如果没有定义提，不需要给出空的花括号。
+
+```scala
+class Rational(n: Int, d: Int)
+```
+
+n和d成为类参数（class parameter），Scala会采集到这两个参数，并且创建一个主构造方法（primary constructor)，接收同样的两个参数。
+
+**在Java中，类有构造方法，构造方法可以接收参数，而在Scala中，类可以直接接收参数，Scala的类更为精简（类定义体内可以直接接收参数，不需要定义字段并编写构造方法，参数赋值给字段的代码）**。
+
+Scala编译器会将在类定义体中给出的非字段或方法定义的代码编译进主构造方法中。
+
 ```scala
 class Rational(n: Int, d: Int){
+    println("Created " + n + "/" + d)
+}
+```
+
+这样会将println方法放在主构造方法中，每创建一个实例，就会触发println方法。
+
+```scala
+scala> new Rational(1, 2)
+Created 1/2
+res13: Rational = Rational@58e9e852
+```
+
+### 6.2 重新实现toString方法
+
+在上例中，解释器打印出`Rational@58e9e852`，解释器是通过对Rational对象调用toString方法会获取这个看上去很奇怪的字符串。Rational类默认继承了`java.lang.Object`类的`toString`实现，简单地打印出类名、@符号和十六进制的数字。
+
+`toString`主要是帮助程序员调试输出语句、日志消息、测试失败报告、以及解释器和调试器输出中给出相应的信息。
+
+目前给出的输出结果并不是特别有帮助。可以通过`重写（override）`来实现打印出分子分母。
+
+```scala
+scala> class Rational(n: Int, d: Int){
+     | override def toString = n + "/" + d
+     | }
+defined class Rational
+
+scala> val x = new Rational(1, 3)
+x: Rational = 1/3
+
+scala> val y = new Rational(5, 7)
+y: Rational = 5/7
+```
+
+### 6.3 检查前置条件
+
+如果定义除法，就要首先要求分母不能为0。解决这种问题的最佳方式是对主构造方法定义一个`前置条件`，分母d不能为0。实现方式的一种使用`require`：
+
+```scala
+scala> class Rational(n: Int, d: Int){
+     | require (d != 0)
+     | override def toString = n + "/" + d
+     | }
+defined class Rational
+
+scala> new Rational(1, 0) //如果实例化时，分母为0，就会抛出IllegalArgumentException异常
+java.lang.IllegalArgumentException: requirement failed
+  at scala.Predef$.require(Predef.scala:268)
+  ... 29 elided
+```
+
+### 6.4 添加字段
+
+为Rational类添加一个add方法，接收另一个Rational作为参数，为了保持Rational不可变，需要创建并返回一个新的持有这两个有理数的和的Rational对象。
+
+```scala
+class Rational(n: Int, d: Int){
+    require(d != 0)
+    val numer: Int = n
+    val denom: Int = d
+    override def toString = numer + "/" + denom
+    def add(that: Rational): Rational = {
+        new Rational(numer * that.denom + that.numer * denom, d * that.denom)
+    }
+}
+
+scala> val oneHalf = new Rational(1, 2)
+obeHalf: Rational = 1/2
+
+scala> val twoThird = new Rational(2, 3)
+twoThird: Rational = 2/3
+
+scala> oneHalf add twoThird
+res16: Rational = 7/6
+```
+
+### 6.5 自引用
+
+关键字`this`指向当前执行方法的调用对象。当被用在构造方法的时候，指向被构造的实例。
+
+```scala
+def lessThan(that: Rational) = {
+    this.numer * that.denom < this.denom * that.numer
+}
+```
+
+this.numer指向执行lessThan调用的对象的分子，也可以省去this，两者时等效的。
+
+另外是一个不能省去this的定义，加入要添加一个max方法，，返回有理数和参数之前较大的一个。
+
+```scala
+def max(that: Rational) = {
+    if (this.lessThan(that)) that else this
+}
+```
+
+第一个this可以省略，但第二个不可以省略，因为它代表了表达式为false时的返回值。
+
+### 6.6 辅助构造方法
+
+在Scala中，`主构造方法之外的构造方法为`**`辅助构造方法(auxiliary constructor)`**。例如，如果分母为0，则可以简单的写为5而不是5/1，也就是在分母为1的情况下，可以只接收一个参数，即分子。
+
+`辅助构造方法以def this(...)开始`，辅助构造方法只是调用了一下主构造方法，透传它唯一的参数n作为分子，1作为分母。
+
+```scala
+def this(n: Int) = this(n, 1) //1为默认值
+```
+
+>**在Scala中，每个辅助构造方法都必须首先调用同一个类的另一个构造方法。换句话说，Scala辅助构造方法的第一条语句必须是这样的形式：`this(...)`**。被调用的构造方法要么是主构造方法，要么是另一个发起调用的构造方法之前的另一个辅助构造方法。这样规则的净效应是`Scala的每个构造方法最终都会用到该类的主构造方法`。**`主构造方法就是该类的唯一入口`**。
+
+### 6.7 私有字段和方法
+
+上述定义的类中，加入分子和分母可以化简，比如66/42可以正则化等效为11/7，就是分子和分母除以他们的`最大公约数`，我们可以定义一个私有方法。
+
+```scala
+private def gcd(a: Int, b: Int)：Int = {
+    if(a == b) a else gcd(b, a % b)
+
+//添加一个私有字段g
+private val g = gcd(n.abs, d.abs)
+}
+```
+
+在Rational类中，实例化时，我们只能使用 `x.add(y)`或者`x add y`，但不能使用`x + y`。这是因为我们没有定以`+`这个方法。将类中add方法改为名为+的方法，这样就可以使用`x.+(y)`或者`x+y`。
+
+```scala
+def + (that: Rational):Rational = {
+    new Rational(numer * that.denom + denom * that.numer, denom * that.denom)
+  }
+```
+
+### 6.8 Scala中的标识符
+
+#### 6.8.1 字母和数字标识符
+
+- 字母数字标识符：以字母或下划线开头，$也算作字母，但是它是系统预留给那些有Scala编译器生成的标识符。
+- Scala命名遵循`驼峰命名法`，很少使用下划线。
+- 字段、方法、方法参数、局部变量和函数以小写字母开头。
+- 类和特质以大写字母开头。
+
+**尽量不要在标识符末尾加上下划线**，如果你像这样来声明一个变量，`val name_: Int = 1`，会编译出错，编译器会认为你要声明的变量名称为`name_:`，要让代码编译通过，需要在下划线后面加上一个空格`val name_ : Int = 1`。
+
+#### 6.8.2 操作标识符
+
+指一个或多个操作符组成，Scala编译器会在内部将操作符用内嵌$的方式转成合法的Java标识符。比如`:->`这个操作符在内部会被表示为`$colon$minus$greater`。如果你打算在Java内部使用这些标识符，就需要使用这种内部形式。
+
+#### 6.8.3 混合标识符
+
+就是一个字母数字组合的操作符、一个下划线和一个符号操作符组成，如`unary_!`。
+
+#### 6.8.4 字面标识符
+
+用反引号括起来的任何字符串（\`...\`）。`可以将任何能被运行是接收的字符串放在反引号当中，作为标识符`，其结果永远是个合法的Scala标识符，甚至反引号中是Scala的保留字也生效。一个典型的例子是访问Java的Thread类的静态方法yield，不能直接写成`Thread.yield()`，因为yield是Scala的保留字，不过仍然可以在反引号中使用这个方法名，像这样`Thread`.\`yield\``()`。
+
+### 6.9 方法重载
+
+定义相同的方法名，不同的方法入参，最终Rational的类结构定义如下。
+
+```scala
+class Rational(n: Int, d: Int) {
   require(d != 0)
   private val g = gcd(n.abs, d.abs)
   val numer = n / g
-  val denom
-  def this(n: Int) = this(n,1)
+  val denom = d / g
 
-  def + (that: Rational): Rational =
-    new Rational(numer * that.denom + denom * that.numer, denom * that.denom)
-  
-  def + (i: Int): Rational = new Rational(numer + i * denom, denom)
+  def this(n: Int) = this(n, 1)
 
-  def - (that: Rational): Rational =
-   new Rational(numer * that.denom - denom * that.numer, denom * that.denom)
+  def +(that: Rational): Rational =
+    new Rational(
+      numer * that.denom + that.numer * denom,
+      denom * that.denom
+    )
 
-  def - (i: Int): Rational = new Rational(numer - i * denom, denom)
+  def +(i: Int): Rational =
+    new Rational(numer + i * denom, denom)
 
-  def * (that: Rational): Rational =
-   new Rational(numer * that.numer, denom * that.denom)
+  def -(that: Rational): Rational =
+    new Rational(
+      numer * that.denom - that.numer * denom,
+      denom * that.denom
+    )
 
-  def *(i: Int): Rational = new Rational(numer * i, denom)
+  def -(i: Int): Rational =
+    new Rational(numer - i * denom, denom)
 
-  def / (that: Rational): Rational =
+  def *(that: Rational): Rational =
+    new Rational(numer * that.numer, denom * that.denom)
+
+  def *(i: Int): Rational =
+    new Rational(numer * i, denom)
+
+  def /(that: Rational): Rational =
     new Rational(numer * that.denom, denom * that.numer)
 
-  def /(i: Int): Rational = new Rational(numer, denom * i)
+  def /(i: Int): Rational =
+    new Rational(numer, denom * i)
 
   override def toString = numer + "/" + denom
 
   private def gcd(a: Int, b: Int): Int =
-   if (b == 0) a else gcd(b, a % b)
+    if (b == 0) a else gcd(b, a % b)
 }
-
-
 ```
 
 ```scala
@@ -838,220 +1124,37 @@ def gcdLong(x: Long, y:Long) = {
 }
 ```
 
-```scala
-val line = ""
-do{
- line = readLine()
- println("Read: " + line)
-} while(line != "")
-```
+### 6.10 隐式转换
+
+通过定义Rational类，定义一个变量
 
 ```scala
-val filesHere = (new java.io.File(".").listFiles
-
-def fileLines(file: java.io.File) scala.io.Source.fromFile(file).getLines().toList
-
-def grep(pattern: String) =
-  for (
-  file <- filesHere
-     if file.getName.endsWith(",scala")
-       line <- fileLines(file)
-     if line.trim.matchs(pattern)
- ) println(file + ": " + line.trim)
-grep(".*gcd.*")
+val r = new Rational(2, 3)
 ```
+
+你可以写`r * 2`，但你并不能写`2 * r`，因为2没有对应的方法。
 
 ```scala
-def forLineLengths =
-for {
-    file <- filesHere
-    if file.getName.endsWith(".scala")
-    line <- fileLines(file)
-    trimmed = line.trim
-    if trimmed.matchs(".*for*.")
-} yield trimmed.length
+scala> 2*rx
+<console>:14: error: overloaded method value * with alternatives:
+  (r: Double)Double <and>
+  (r: Float)Float <and>
+  (r: Long)Long <and>
+  (r: Int)Int <and>
+  (r: Char)Int <and>
+  (r: Short)Int <and>
+  (r: Byte)Int
+ cannot be applied to (Rational)
+       2*r
+        ^
 ```
+
+这里的问题是`2 * r`相当于`2.(r)`，但Int类并没有一个接收Rational参数的乘法方法，因为Scala类并不是Scala类库中的标准类。
+
+解决办法：可以创建一个`隐式转换`，在需要时自动将整数转换为有理数，可以在解释器（不是Rational内部）中添加行。
 
 ```scala
-val firstArg = if (!args.isEmpty) args(0) else ""
-
-val friend = 
- firstArg match{
-     case "salt" => "pepper"
-     case "chips" => "salsa"
-     case "eggs" => "bacon"
-     case _ => "huh?"
- }
+implicit def intToRational(x: Int) = new Rational(x)
 ```
 
-```scala
-var i = 0
-val foundIt = false
-while (i < args.length && !foundIt) {
-    if(!args.startsWith("-")) { 
-        if (args(i).endsWith(".scala")) foundIt = true
-    }
-    i = i + 1
- }
-```
-
-```scala
-def searchFrom(i: Int): Int =
-if (i >= args.length) -1
-else if (args(i).startsWith("-")) searchFrom(i + 1)
-else if (args(i).endsWith(".scala")) i
-else searchFrom(i + 1)
-val i = searchFrom(0)
-```
-
-```scala
-def printMutable() = {
-    var i = 1
-    while(i <= 10) {
-        var j = 1
-        while (j <= 10) {
-            val prod = (i * j).toString
-            var k = prod.length
-            while (k < 4) {
-                print(" ")
-                k += 1
-            }
-            print(prod)
-            j += 1
-        }
-        println()
-        i += 1
-    }
-}
-```
-
-```scala
-def makeRowSeq(row: Int) = {
- for (col <- 1 to 10) yield {
-  val prod = (row * col).toString
-  val padding = " " * (4 - prod.length)
-  padding + prod
- }
-}
-
-def makeRow(row: Int) = makeRowSeq(row).mkString
-
-def multiTable() = {
- val tableSeq = for (row <- 1 to 10) yield makeRow(row)
- tableSeq.mkString("\n")
-}
-
-def makeRoeSeq(row: Int) =
-  for (col <- 1 to 10)
-  val prod = (col * row).toString
-  val padding = " " * (4 - prod.length)
-  padding + prod
-
-def makeRow(row: Int) = makeRoeSeq(row).mkString
-
-def multiTable(row: Int) =
-  val tableSeq = for (row <- 1 to 10) yield makeRow(row)
-  tableSeq.mkString("\n")
-```
-
-```scala
-import scala.io.Source
-
-object Longlines{
-    def processFile(filename: String, width: Int) = {
-        val source = Source.fromFile(filename)
-        for (line <- source.getLines())
-          processLine(filename, width, line)
-    }
-
-    def processLine(filename: String, width: Int, line: String) = {
-        if(line.length > width) 
-        println(filename + ": " + line.trim)
-    }
-}
-
-object FindLongLines extends App{
-    val width = args(0).toInt
-    for (arg <- args.drop(1))
-      Longlines.processFile(arg, width)
-}
-
-def approximate(gauss: Double): Double = {
-    if (isGoodEnough(gauss)) gauss 
-    else approximate(improve(gauss))
-}
-
-def approximateLoop(initialGauss: Double): Double = {
-    var gauss = initialGauss
-    while(!isGoodEnough(gauss))
-    gauss = improve(gauss)
-    gauss
-}
-
-object FileMatcher{
-    private def filesHere = (new java.io.File(".")).listFiles
-
-    def filesEnding(query: String) = 
-      for (file <- filesHere
-           if file.getName.endsWith(query))
-    yield file
-}
-
-def filesMatching(query: String, matcher: (String, String) => Boolean) = {
- for (file <- filesHere; if matcher(file.getName, query))
- yield file
-}
-
-def filesEnding(query, String) = filesMatching(query, _.endsWith(_))
-
-def filesContaining(query, String) = filesMatching(query, _.contains(_))
-
-def filesRegex(query, String) = filesMatching(query, _.matchs(_))
-```
-
-文件匹配最终优化版
-
-```scala
-object FileMatcher{
-    private def filesHere = (new java.io.File(".")).listFiles
-    private def filesMatching (matcher: String => Boolean) =
-
-    for (file <- filesHere; if matcher(file.getName)) 
-      yield file
-
-    def filesEnding(query: String) = filesMatching(_.endsWith(query))
-
-    def filesContaining(query: String) = filesMatching(_.contains(query))
-
-    def filesRegex(query: String) = filesMatching(_.matchs(query))
-}
-
-import java.io.File
-import java.io.PrintWriter
-
-def withPrintWriter(file: File, op: PrintWriter => Unit) = {
-    val writer = new PrintWriter(file)
-    try op(writer)
-    finally writer.close()
-}
-```
-
-将两个参数分开
-
-```scala
-def withPrintWriter(file: File)(op: PrintWriter => Unit) = {
-    val writer = new PrintWriter(file)
-    try op(writer)
-    finally writer.close()
-}
-```
-
-调用上述方法
-
-```scala
-val file = new File("data.txt")
-
-withPrintWriter(file){
-    writer.println(new java.util.Date)
-}
-```
+然后再执行`2 * r`就能正常计算了。为了让隐式转换正常工作，它需要在作用域内。如果你将隐式方法定义在Rational内部，对解释器而言并没有在作用域范围内，就目前而言，必须在解释器中直接定义这个转换。
