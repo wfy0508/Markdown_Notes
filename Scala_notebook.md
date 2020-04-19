@@ -1158,3 +1158,274 @@ implicit def intToRational(x: Int) = new Rational(x)
 ```
 
 然后再执行`2 * r`就能正常计算了。为了让隐式转换正常工作，它需要在作用域内。如果你将隐式方法定义在Rational内部，对解释器而言并没有在作用域范围内，就目前而言，必须在解释器中直接定义这个转换。
+
+## 7 内建的控制结构
+
+Scala只有为数不多的几个内建的控制结构，包括if, while, for, try, match和函数调用。`Scala所有的控制结构都返回某种值作为结果`。
+
+### 7.1 if表达式
+
+和其他语言基本一致，首先测试某个条件，然后根据指令条件时候来满足执行两个不同代码分支当中的一个。
+
+```scala
+var filename = "default.txt"
+if(!args.isEmpty) filename = args(0)
+```
+
+更精简的写法为不用`var`，而是使用`val`。
+
+```scala
+val filename = if(!args.isEmpty) args(0) else "default.txt"
+```
+
+使用`val`的好处是对`等式推理(equational reasoning)`的支持，引入的变量等于计算出它的值的表达式（假定这个表达式没有副作用）。`任何你打算写变量名的地方，都可以直接用表达式来替换`。
+
+### 7.2 while循环
+
+和其他语言没啥大的差别，包含一个条件检查和一个循环体。
+
+```scala
+def gcdLoop(x: Long, y: Long): Long = {
+  var a = x
+  var b = y
+  while (a != 0){
+    val temp = a
+    a = b % a
+    b = temp
+  }
+}
+```
+
+do-while循环：
+
+```scala
+var ling = ""
+do {
+  line = readLine()
+  println("Read: " + line)
+} while (line !="")
+```
+
+while和do-while这样的语法结构，称之为循环而不是表达式。因为他们的返回值类型为Unit。实际上存在一个类型为Unit的值，叫做`单元值（unit value）`，写作`()`。存在这样一个`()`值，是Scala的Unit与Java的void的不同。
+
+```scala
+scala> def greet() = {println("hello")}
+greet: ()Unit
+
+scala> () == greet()
+<console>:13: warning: comparing values of types Unit and Unit using `==' will always yield true
+       () == greet()
+          ^
+hello
+res0: Boolean = true
+```
+
+`只要返回结果类型为Unit，那么永远和单元值相等`。
+
+另一个相关的返回单元值的语法结构是对var的赋值。
+
+```scala
+val line = ""
+while((line.readLine() != "") //条件永远成立
+  println("Read: " + line)
+```
+
+**用`!=`对类型为Unit的值和String作比较将永远返回true**。在Java中，赋值语句的结果是被赋上的值，而`在Scala中赋值语句的结果永远是单元值()`。
+
+由于while循环没有返回值，纯函数式编程语言通常都不支持，这些语言有表达式，而不是循环。尽管如此。Scala中还是有while循环，因为有时候指令是编程更加易读。但在Scala中，对while循环的使用要保持警惕，尽量使用其他结构来代替。
+
+如开头定义的函数`gcdLoop`，可以有更精简不使用while循环的写法。
+
+```scala
+def gcd(x: Long, y: Long): Long = {
+  if (y == 0) x else gcd(y, x % y)
+}
+```
+
+### 7.3 for表达式
+
+#### 7.3.1 遍历集合
+
+```scala
+val filesHere = (new java.io.File(".")).listFiles
+
+for(file <- filesHere) //生成器语法，会遍历fileHere中每个文件
+  println(file)
+```
+
+for表达式可以用于任何种类的集合，而不仅仅是数组。`Range(区间)`是一种特殊用法，可以用`“1 to 5”`创建一个Range，并用for来遍历它们。
+
+```scala
+for (i <- 1 to 4)
+  println("Iteration: " + i)
+
+Iteration: 1
+Iteration: 2
+Iteration: 3
+Iteration: 4
+```
+
+如果想遍历不包含上界，可以使用`until`。
+
+```scala
+for (i <- 1 until 4) 
+  println("Iteration: " + i)
+
+Iteration: 1
+Iteration: 2
+Iteration: 3
+```
+
+在其他语言中，可能通过下面例子遍历数组：
+
+```scala
+for (i <- 0 to filesHere.length - 1)
+  println(filesHere(i))
+```
+
+但在Scala中比较少见，因为Scala可以直接遍历数组，这样可以让代码更加简短。
+
+#### 7.3.2 过滤
+
+在for表达式上添加过滤器，过滤器是for表达式的圆括号中的一个if子句。比如要查找文件后缀名为`.scala`的文件。
+
+```scala
+val filesHere = (new java.io.File(.)).listFiles
+for(file <- filesHere if file.getName.endsWith(".scala"))
+  println(file)
+
+//也可以用下面语句
+for(file <- filesHere)
+  if (file.getName.endsWith(".scala"))
+    println(file)
+```
+
+`可以包含更多的过滤器，只需要添加if子句就行了`。
+
+```scala
+for (file <- filesHere
+     if file.isFile //只要文件
+     if file.getName.endsWith(".scala")
+) println(file)
+```
+
+#### 7.3.3 嵌套迭代
+
+如果有多个`<-子句`，将得到嵌套循环。注意，在圆括号中Scala不会自动推断分号，可以使用花括号{}而不是圆括号()来包括生成器和过滤器。这样的好处是可以省去某些分号。
+
+```scala
+def fileLines(file: java.io.File) =
+  scala.io.Source.fromFile(file).getLines().toList
+
+def grep(pattern: String) =
+  for ( file <- filesHere
+        if file.getName.endsWith(".scala");
+        line <- fileLines(file)
+        if line.trim.matches(pattern)
+      ) println(file + ": " + line.trim)
+grep(".*gcd.*")
+```
+
+#### 7.3.4 中途(Mid-stream)绑定变量
+
+上面例子中，line.trim重复了两遍，我们的要求是尽量只算一次。可以用`=`将表达式的结果绑定到一个新的变量上。这样后面直接引用即可。
+
+```scala
+def grep(pattern: String) = {
+  for {
+    file <- filesHere
+    if file.getName.endsWith(".scala")
+    file <- filesHere(file)
+    trimmed = line.trim  //结果绑定到trimmed上
+    if trimmed.matchs(pattern)
+  } println(file + ": " + trimmed) //直接引用trimmed
+}
+grep(".*gcd.*")
+```
+
+#### 7.3.5 产出一个新的集合
+
+目前为止，所有的迭代都是对遍历到的值进行操作，然后忘掉他们。也完全可以在每次迭代时生成一个可以记住的值。具体做法是在for表达式的代码体之前加上关键字`yield`。
+
+```scala
+def scalaFiles = {
+  for{
+    file <-filesHere
+    if file.getName.endsWith(".scala")
+  } yield file
+  //**代码体**
+}
+```
+
+for表达式每执行一次，都会交出一个值。执行完毕后，会交出所有的值，包含在一个集合当中，结果是`Array[file]`。
+
+要小心`yield`的位置。for表达式语法为:
+
+>**`for`** 子句 **`yield`** 代码体
+
+### 7.4 用try表达式实现异常处理
+
+#### 7.4.1 抛出异常
+
+**throw `new` IlleaglArgumentException**
+
+```scala
+val half = 
+  if (n % 2 == 0)
+    n / 2
+  else
+    throw new IlleaglArgumentException
+```
+
+从技术上讲，抛出异常的表达式类型为`Nothing`。
+
+#### 7.4.2 捕获异常
+
+**catch子句**
+
+```scala
+import java.io.FileReader
+import java.iop.FileNotFoundException
+import java.io.IOException
+
+try{
+  val f = new FileReader("input.txt")
+} catch{
+  case ex: FileNotFoundException => //处理找不到文件的异常
+  case ex: IOException => //处理I/O错误
+}
+```
+
+**finally子句**
+
+```scala
+import java.io.FileReader
+
+val file = new FileReader("input.txt")
+try{
+
+} finally {
+  file.close()
+}
+```
+
+**交出值**
+
+跟Scala其他控制结构一样，`try-catch-finally`结构最终返回一个值。无论怎样，`finally`最终都会执行，这样就会造成`finally`子句的返回值可能会改写任何之前的`try`代码块或某个`catch`子句中产生的值。
+
+```scala
+def f(): Int = try return 1 finally return 2
+```
+
+无论怎么样`f()`都会返回2，`finally`将`try`子句返回的1给复写掉,因为`return`会显式的返回结果。
+
+```scala
+def g(): Int = try 1 finally 2
+
+<console>:11: warning: a pure expression does nothing in statement position
+       def g():Int = try 1 finally 2
+
+//一个纯表达式在代码段中什么都不会做。
+```
+
+通过上面例子，尽量不要在`finally`子句中返回值。
