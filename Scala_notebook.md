@@ -1429,3 +1429,166 @@ def g(): Int = try 1 finally 2
 ```
 
 通过上面例子，尽量不要在`finally`子句中返回值。
+
+### 7.5 match表达式
+
+Scala中的match表达式可以从若干选项中选择，就像其他语言的switch语句。
+
+```scala
+val firstArg = if(arg.length > 0) args(0) else ""
+
+firstArg match{
+  case "salt" => println("pepper")
+  case "chips" => println("salsa")
+  case "eggs" => println("bacon")
+  case _ => println("huh?")
+}
+```
+
+Scala的match与Java的switch相比，有些重要的区别。
+
+- 任何常量、字符串都可以用作样例，而不仅限于Java的case语句支持的整型、枚举和字符串常量；
+
+- 每个选项的最后没有`break`语句，`Scala中break语句是隐含的`，并不会出现某个可选项执行完继续执行下一个可选项的情况；
+
+- match表达式与Java的switch最显著的不同是，**`match表达式会返回值`**。
+
+将返回的值保存在变量friend中：
+
+```scala
+val firstArg = if(arg.length > 0) args(0) else ""
+
+val friend = firstArg match{
+  case "salt" => "pepper"
+  case "chips" => "salsa"
+  case "eggs" => "bacon"
+  case _ => "huh?"
+}
+
+println(friend)
+```
+
+### 7.6 没有break和continue
+
+Scala去掉了break和continue，因为它与`函数字面量`不搭。最简单的方式就是用if换掉每一个continue，用布尔值换点每一个break。
+
+如果是检索参数列表，找到一个以.scala结尾但不以连字符(-)开头的字符串，Java可以这样写：
+
+```java
+int i = 0;
+boolean foundIt = false;
+while (i < args.length){
+  if (args[i].startsWith("-")){
+    i = i + 1;
+    continue;
+  }
+  if (args[i].endsWith(".scala")){
+    foundIt = true;
+    break;
+  }
+  i = i + 1;
+}
+```
+
+但是换做用Scala写，可以把先if再continue的写法改成用if将整个while循环体剩余的部分包括起来。为了去掉break，可以添加一个布尔值，表示是否需要继续循环。
+
+```scala
+var i = 0
+val foundIt = false
+
+while (i < args.length && !foundIt){
+  if (arg(i).startsWith("-")){
+    if (args(i).endsWith(".scala")){
+      foundIt = true
+    }
+  }
+  i = i + 1
+}
+```
+
+如果不想要var变量，可以将循环重写为递归函数：
+
+```scala
+def serachFrom(i: Int): Int = {
+  if (i >= args.length) -1
+  else if (args(i).startsWith("-")) searchFrom(i + 1)
+  else if (args(i).endsWith(".scala")) i
+  else searchFrom(i + 1)
+}
+
+val i = searchFrom(0)
+```
+
+>Scala编译器实际上不会对上例中的代码生成递归函数，由于所有的递归调用发生在`函数尾部（tail-call position， 尾递归）`，编译器会生成和while循环类似的代码。
+
+### 7.7 变量作用域
+
+和Java基本类似，一点不同是，变量一但定义好，就不能在相同的作用域定义相同名字的新变量。
+
+```scala
+def printMultiTable() = {
+  var i = 1 
+  //只有i在作用域内
+  while (i <= 10){
+    var j = 1
+    //i和j在作用域内
+    while (j <= 10){
+      val prod = (i * j).toString
+      //i，j和prod在作用域内
+      var k = prod.length
+      ////i，j，k和prod在作用域内
+      while (k < 4){
+        print(" ")
+        k += 1
+      }
+      print(prod)
+      j += 1
+    }
+    //i和j仍在作用域内，k和prod超出了作用域
+    println()
+    i += 1
+  }
+  //i仍在作用域内
+}
+
+//执行该函数
+scala> printMultiTable()
+   1   2   3   4   5   6   7   8   9  10
+   2   4   6   8  10  12  14  16  18  20
+   3   6   9  12  15  18  21  24  27  30
+   4   8  12  16  20  24  28  32  36  40
+   5  10  15  20  25  30  35  40  45  50
+   6  12  18  24  30  36  42  48  54  60
+   7  14  21  28  35  42  49  56  63  70
+   8  16  24  32  40  48  56  64  72  80
+   9  18  27  36  45  54  63  72  81  90
+  10  20  30  40  50  60  70  80  90 100
+
+```
+
+### 7.8 对指令式代码进行重构
+
+对指令式风格的代码进行重构
+
+```scala
+//以序列形式返回一行
+def makeRowSeq(row: Int) = {
+  for (col <- 1 to 10) yield {
+    val prod = (row * col).toString
+    val padding = " " * (4 - prod.length)
+    padding + prod
+  }
+}
+
+//以字符串形式返回一行
+def makeRow(row: Int) = makeRowSeq(row).mkString
+
+//以每行占用一个文本行的字符串形式返回表格
+def multiTable() = {
+  val tableSeq = for(row <- 1 to 10) yield makeRow(row)
+  tableSeq.mkString("\n")
+}
+}
+```
+
+执行结果和7.7的例子相同。
