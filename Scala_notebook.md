@@ -217,7 +217,7 @@ Scala会推断出pair的类型为`Tuple2[Int, String]`，这里的“.”跟用�
 
 Scala还提供了Set和Map的可变（mutable）与不可变（immutable）的不同选择。Scala的API包含了一个基础的特质（trait）来表示集，如下图，三个特质都叫做Set，但是他们完整的名称并不相同，因为他们位于不同的包。如果想要使用一个HashSet，可以根据需要选择可变或不可变的版本。
 
-```
+```plain txt
                    ┌----------------┐
                    |scala.collection|
                    |      Set       |
@@ -421,7 +421,7 @@ class CheckSumAccumulator{
 }
 ```
 
-一个仅因其副作用而执行的方法称为过程(procedure)。类CheckSumAccumulator中的add方法，就是需要其执行之后的产生副作用。
+一个仅因其副作用而执行的方法称为`过程(procedure)`。类CheckSumAccumulator中的add方法，就是需要其执行之后的产生副作用。
 
 ### 4.2 分号推断
 
@@ -436,7 +436,7 @@ val s = "hello"; println(s)
 ```scala
 if (x < 2)
   println("too small")
-else 
+else
   println("ok")
 ```
 
@@ -677,7 +677,7 @@ hello: String = hello
 因为这种语法对于包含大量转义序列或跨多行字符串的字符串来说比较笨拙，所以Scala为原始字符串提供了一种特殊的语法。
 
 ```scala
-println("""Welcome to Ultamix 3000. 
+println("""Welcome to Ultamix 3000.
            Type "HELP" for help.""")
 
 Welcome to Ultamix 3000.
@@ -1268,7 +1268,7 @@ Iteration: 4
 如果想遍历不包含上界，可以使用`until`。
 
 ```scala
-for (i <- 1 until 4) 
+for (i <- 1 until 4)
   println("Iteration: " + i)
 
 Iteration: 1
@@ -1370,7 +1370,7 @@ for表达式每执行一次，都会交出一个值。执行完毕后，会交�
 **throw `new` IlleaglArgumentException**
 
 ```scala
-val half = 
+val half =
   if (n % 2 == 0)
     n / 2
   else
@@ -1527,7 +1527,7 @@ val i = searchFrom(0)
 
 ```scala
 def printMultiTable() = {
-  var i = 1 
+  var i = 1
   //只有i在作用域内
   while (i <= 10){
     var j = 1
@@ -1588,8 +1588,161 @@ def multiTable() = {
   val tableSeq = for(row <- 1 to 10) yield makeRow(row)
   tableSeq.mkString("\n")
 }
-}
 ```
 
 执行结果和7.7章节的例子相同。
+
+## 8 函数和闭包
+
+### 8.1 方法
+
+定义函数最常用的用途是作为一个对象的成员，这时函数被称为`方法(method)`。
+
+```scala
+import scala.io.Source
+
+object LongLines {
+  def processFile(filename: String, width: Int) = {
+    val source = Source.fromFile(filename)
+    for(line <- source.getLines()) //getLines()返回一个迭代器
+      processLine(filename, width, line)
+  }
+  private def processLine(filename: String, width: Int, line: String) = {
+    if(ling.length > width)
+      println(filename + ": " + line.trim)
+  }
+}
+```
+
+上例中定义了两个方法`processFile`和`processLine`。
+
+### 8.2 局部函数
+
+函数式编程风格是尽量将程序拆成很多小的函数实现。单个函数通常很小。这种风格的优点是它为程序员构建复杂程序提供了灵活性。这种方法的一个问题是，所有的辅助函数名都可能污染程序的命名空间。
+
+在解释器中，这不是什么大问题，但一旦函数被打包成可重用的类和对象，最好能隐藏部分辅助函数，这时我们可以将辅助函数定义为`局部函数`。这些函数只在部分作用域内有效。
+
+在Java中，主要方式是定义私有方法，在Scala中，可以将局部函数定义在其他函数的内部。
+
+```scala
+def processFile(filename: String, width: Int) = {
+  def processLine(filename: String, width:Int, line: String) = {
+    if(line.length > width){
+      println(filename + ": " + line.trim)
+    }
+  }
+  val source = Source.fromFile(filename)
+  for (line <-source.getLines()){
+    processLine(filename, width, line)
+  }
+}
+```
+
+### 8.3 一等函数
+
+一等函数有如下特征：
+
+- 在运行时创建
+- 能赋值给变量或数据结构中的元素
+- 能作为参数传给函数
+- 能作为函数的返回结果
+
+`函数字面量(function literal)`被编译成一个类，这个类在运行时实例化成一个函数值。函数字面量与函数值的区别在于函数字面量存在于源码中，函数值在运行时作为对象存在。这个区别相当于类(source code)和对象(runtime)的区别。
+
+下面定义一个展示一个变量加1的函数字面量
+
+```scala
+(x: Int) => x + 1
+```
+
+ **`=>`** 代表将左边的东西的转换为右边的东西的符号，这个函数将任何整型变量由`x`转换为`x+1`。
+
+
+由于函数值是对象，所以你可以将他们存储在一个变量中，它们也是函数，因此可以使用常用的括号函数调用符号来调用它们。
+
+```scala
+scala> var increase = (x: Int) => x + 1
+increase: Int => Int = $$Lambda$1043/700837405@15cea7b0
+
+scala> increase(10)
+res0: Int = 11
+```
+
+因为increase是一个`var`，所以你可以给他赋予不同的函数值。
+
+```scala
+scala> increase = (x: Int) => x + 9999
+increase: Int => Int = $$Lambda$1078/1843853990@3cad68df
+
+scala> increase(1)
+res1: Int = 10000
+```
+
+如果希望函数字面量中，有多个语句，可以使用`{}`将他们包括起来。
+
+```scala
+scala> increase = (x: Int) =>{
+     | println("We")
+     | println("are")
+     | println("here")
+     | x + 1
+     | }
+increase: Int => Int = $$Lambda$1081/1490735178@73e776b7
+
+scala> increase(1)
+We
+are
+here
+res2: Int = 2
+```
+
+在函数字面量中，你可以用`foreach`迭代一个集合。
+
+```scala
+scala> val someNumbers = List(1,2,3,4,5,6)
+someNumbers: List[Int] = List(1, 2, 3, 4, 5, 6)
+
+scala> someNumbers.foreach((x: Int) => println(x))
+1
+2
+3
+4
+5
+6
+
+scala>
+```
+
+还可以使用`过滤(filter)`方法：
+
+```scala
+scala> someNumbers.filter(x => x > 3)
+res12: List[Int] = List(4, 5, 6)
+```
+
+### 8.4 函数字面量简短形式
+
+一种方式是省去函数的参数类型，由于someNumbers是一个整型列表，所以编译器知道x肯定是整型。
+
+```scala
+ someNumbers.filter((x) => x > 0)
+```
+
+第二种精简方法是去掉参数周围的圆括号，编译器能推断出参数的类型，圆括号可以省略。
+
+```scala
+ someNumbers.filter(x => x > 0)
+```
+
+### 8.5 占位符
+
+为了使函数字面量更加精简，可以使用下划线作为占位符来代表一个或多个参数，`只要每个参数在函数字面量中只出现一次`。比如，`_ > 0`表示检查一个值是不是大于0。
+
+```scala
+someNumbers.filter(_ > 0)
+```
+
+可以将`下划线（占位符）`视为`需要填写`的`空白(blank)表达式`。这个空白将在每次调用函数时用函数的参数填充。
+
+
 
