@@ -1744,5 +1744,211 @@ someNumbers.filter(_ > 0)
 
 可以将`下划线（占位符）`视为`需要填写`的`空白(blank)表达式`。这个空白将在每次调用函数时用函数的参数填充。
 
+有时使用下划线作为参数的占位符，编译器可能没有足够的信息去推断参数的类型，如当你写`_ + _`时：
 
+```scala
+scala> val f = _ + _
+<console>:11: error: missing parameter type for expanded function ((x$1: <error>, x$2) => x$1.$plus(x$2))
+       val f = _ + _
+               ^
+<console>:11: error: missing parameter type for expanded function ((x$1: <error>, x$2: <error>) => x$1.$plus(x$2))
+       val f = _ + _
+                   ^
+```
 
+这种情况下，可以使用冒号来指定参数的类型：
+
+```scala
+scala> val f = (_: Int) + (_: Int)
+f: (Int, Int) => Int = $$Lambda$1042/1378592036@29c5ee1d
+
+scala> f(5, 10)
+res0: Int = 15
+```
+
+`_ + _`为定义带两个参数的函数字面量，每个参数在函数字面量中只能出现一次，多个下划线代表多个参数，而不能多次重复引用一个参数，也就是传入的参数和占位符要按照位置一一对应。
+
+### 8.6 部分应用函数
+
+虽然前面的示例用下划线替代了单个参数，但也可以用下划线替换整个参数列表，比如：
+
+```scala
+scala> val someNumbers = List(1,2,3,-8,-10,8,-34)
+someNumbers: List[Int] = List(1, 2, 3, -8, -10, 8, -34)
+
+scala> someNumbers.foreach(println _)
+1
+2
+3
+-8
+-10
+8
+-34
+```
+
+`这时下划线不是代表单个参数，而是代表整个参数列表`。注意函数名和下划线之间要有空格隔开，不然编译器会认为引用的是另一个符号。上述写法等同于:
+
+```scala
+someNumbers.foreach(x => println(x))
+```
+
+以这种方式使用下划线时，您是在编写一个部分应用函数。在Scala中，当调用一个函数，传入任何需要的参数时，将该函数应用于传入的参数上。
+
+```scala
+scala> def sumAbc(a: Int, b: Int, c: Int) = a + b + c
+sumAbc: (a: Int, b: Int, c: Int)Int
+```
+
+部分应用的函数是这样一种表达式：不必提供函数所需的所有参数。例如，要创建一个包含sumAbc的部分应用的函数表达式，在该表达式中不提供所需的三个函数中的任何一个，只是在函数名之后加上一个下划线：
+
+```scala
+scala> val a = sumAbc _
+a: (Int, Int, Int) => Int = $$Lambda$1267/146644232@189f3ccd
+```
+
+当对这个新函数值应用三个参数时，
+
+```scala
+scala> a(1, 2, 3)
+res12: Int = 6
+```
+
+变量a引用了一个由`sumAbc实例化的函数值对象`。编译器生成的类有一个接受三个参数的apply方法，因为sumAbc中有3个缺失的参数。Scala编译器将表达式a(1,2,3)转换为函数值的apply方法的调用，并传入三个参数1、2和3。`a(1, 2, 3)是a.apply(1, 2, 3)的简短形式`。
+
+这个apply方法是由编译器根据sumAbc的定义自动生成，然后将3个参数传入sumAbc的参数列表中。这个例子中apply调用了sumAbc(1, 2, 3)，然后返回该函数的返回值，也就是6。
+
+另一种考虑这种表达式的方法是，用下划线来表示整个参数列表，这是一种将def转换为函数值的方法。例如，如果您有一个局部函数，如sum(a: Int, b: Int, c: Int): Int，您可以将它“包装”在一个函数值中，该函数值的apply方法具有相同的参数列表和结果类型。当你把这个函数值应用到一些参数上时，会将sumAbc应用到参数列表中，然后返回函数的返回值。
+
+即使不能将方法或嵌套函数赋给变量，或将其作为参数传递给另一个函数，但如果将方法或嵌套函数包装在函数值中，并在其名称后面加上下划线，则可以实现这些操作。
+
+尽管sumAbc确实是一个部分应用函数，但可能不太清楚为什么这么叫。它有这个名字是因为你没有把那个函数应用到它的所有参数上。如果是`sumAbc _`，就没有应用到任何参数上，但是也可以只传入部分参数来表示部分应用函数。例子如下：
+
+```scala
+scala> val b = sumAbc(1, _: Int, 3)
+b: Int => Int = $$Lambda$1268/1888428943@509d999c
+```
+
+在这个例子中，提供了第一个和第三个参数，只有第二个参数为空。Scala编译器会生成一个函数类，apply方法之应用到缺失的参数上。当使用那1个参数调用时(`b(5)`)，这个生成的函数的apply方法调用sumAbc，传入第一个参数`1`、传入指定的参数`(5)`和第三个参数`3`。
+
+```scala
+scala> b(5) //自动将5映射到第二个参数上
+res13: Int = 9
+```
+
+如果你写的部分应用函数，省去了全部的参数，比如写作`println _`或者`sum _`，此时的表达式可以更加的精简，可以省去下划线`_`。
+
+```scala
+someNumbers.foreach(println)
+```
+
+这种形式只允许在需要函数的地方使用，例如本例中的foreach调用。编译器知道在这种情况下需要一个函数，因为foreach要求函数作为参数传递。在不需要函数的情况下，尝试使用此表单将导致编译错误。
+
+```scala
+scala> val c = sumAbc
+<console>:12: error: missing argument list for method sumAbc
+Unapplied methods are only converted to functions when a function type is expected.
+You can make this conversion explicit by writing `sumAbc _` or `sumAbc(_,_,_)` instead of `sumAbc`.
+       val c = sumAbc
+               ^
+
+scala> val c = sumAbc _
+c: (Int, Int, Int) => Int = $$Lambda$1272/1333118503@1631a614
+```
+
+### 8.7 闭包
+
+目前为止，所有的函数字面量示例都只引用了传递的参数。比如`(x: Int) => x + 1`，在函数体中，只有一个传递参数x，是函数中定义的一个参数。但是，你还可以引用其他地方定义的变量，如：
+
+```scala
+(x: Int) => x+ more
+```
+
+目前为止，我们不知道`more`代表的是意思，`more是一个自由变量(free variable)`，因为函数字面量本身并没有给出它任何定义。对比来说，`x是一个绑定变量(bound variable)`，因为在函数上下文中知道它代表的意思，它是函数的唯一参数。
+
+如果没有more的定义而去直接调用它，编译器会抛出错误：
+
+```scala
+scala> (x: Int) => x + more
+<console>:12: error: not found: value more
+       (x: Int) => x + more
+                       ^
+```
+
+先定义more，然后再去调用，就不会出现问题：
+
+```scala
+scala> val more = 1
+more: Int = 1
+
+scala> val addMore = (x: Int) => x + more
+addMore: Int => Int = $$Lambda$1071/1771190979@1f1ff879
+
+scala> addMore(1)
+res2: Int = 2
+```
+
+在运行时，从这个函数字面量创建的函数值(对象)称为`闭包`。这个名字来自于通过`“捕获”`自由变量的绑定来`“关闭”`函数字面量的行为。
+
+一个没有自由变量的函数字面量称为`闭项(close term)`，比如，`(x: Int) => x +1`。因此，从严格意义上讲，在运行时从这个函数字面量上创建的函数值不是闭包，因为它本身就是闭合的。
+
+任何有自由变量的函数字面量称为`开项(open term)`。根据定义，在运行时从`(x: Int) => x + more`创建的任何函数值都需要捕获其自由变量`more`的绑定。得到的函数值，包含了对自由变量`more`的捕获，称之为闭包是由于函数值是关闭`开项`行为的最终结果。
+
+**如果自由变量`more`发生变化，闭包的结果也会随之发生变化**。
+
+```scala
+scala> var more = 1
+more: Int = 1
+
+scala>  val addMore = (x: Int) => x + more
+addMore: Int => Int = $$Lambda$1074/1001100746@71ad959b
+
+scala> addMore(1)
+res4: Int = 2
+
+scala> more = 10000
+more: Int = 10000
+
+scala> addMore(1)
+res5: Int = 10001
+
+```
+
+直观地说，`Scala的闭包捕获的是变量本身，而不是变量所引用的值`。闭包对自由变量的更改在闭包外是可见的，比如：
+
+```scala
+scala> val someNumbers = List(-11, -10, -5, 0, 5, 10)
+someNumbers: List[Int] = List(-11, -10, -5, 0, 5, 10)
+
+scala> var sum = 0
+sum: Int = 0
+
+scala> someNumbers.foreach(sum += _)
+
+scala> sum
+res8: Int = -11
+```
+
+每次调用这个函数时，它都会创建一个新的闭包。每个闭包将访问在创建闭包时处于活动状态的`more`变量。
+
+```scala
+scala> def makeIncreaser(more: Int) = (x: Int) => x + more
+makeIncreaser: (more: Int)Int => Int
+
+scala> val inc1 = makeIncreaser(1)
+inc1: Int => Int = $$Lambda$1223/705170339@5ea4abef
+
+scala> val incr9999 = makeIncreaser(9999)
+incr9999: Int => Int = $$Lambda$1223/705170339@4893b980
+```
+
+当调用`makeIncreaser(1)`时，将创建并返回一个闭包，该闭包捕获值1作为绑定以获取`more`内容。同理，当调用`makeIncreaser(9999)`时，将创建并返回一个闭包，该闭包捕获值9999作为绑定以获取`more`内容。
+
+当您将这些闭包应用于参数(在本例中，只有一个参数x，必须传入)时，返回的结果取决于创建闭包时如何定义更多的参数:
+
+```scala
+scala> inc1(1)
+res11: Int = 2
+
+scala> incr9999(1)
+res12: Int = 10000
+```
