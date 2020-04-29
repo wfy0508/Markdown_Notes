@@ -2050,3 +2050,76 @@ time = 15881322770
 scala> printTime(Console.err)
 time = 1588132302797
 ```
+
+#### 8.9 尾递归
+
+在第7章提到过，要将vars的while循环转换为只使用vals的更实用的样式，有时可能需要使用递归。下面实现一个尾递归的方法。
+
+```scala
+def approximate(guass: Double): Double = {
+  if (isGoodEnough(guass)) guass
+  else approximate(improve(guass))
+}
+```
+
+该函数通常用于搜索问题，为了加快函数运行速度，你可能会写一个while循环来实现。
+
+```scala
+def approximateLoop(initialGuess: Double): Double = {
+  var guess = initialGuess
+  while (!isGoodEnough(guess))
+    guess = improve(guess)
+  guess
+}
+```
+
+尾递归和while循环之间如何选择，从简洁性和安全性方面来考虑肯定函数式编程更好，但指令式编程是不是更加高效呢？`实际上两者的运行速度几乎相同`。这看起来可能很奇怪，因为递归调用每次都会跳回到开头，重新开始计算。
+
+但实际上，编译器会对第一种函数式的`approximate`定义应用一项重要优化。像`approximate`这种在函数最后一步`直接调用自身`，称为`尾递归(tail recursive)`。Scala编译器检测到尾递归，并在用新的值更新函数参数后，用返回函数开头的跳转替换它，类似于循环的实现方式。
+
+**跟踪尾递归**
+
+尾部递归函数不会为每个调用构建新的堆栈帧，所有的调用都会在一个栈帧中执行。这可能会让程序员感到惊讶，因为他们正在检查程序失败的堆栈跟踪。
+
+```scala
+def boom(x: Int): Int = {
+  if (x == 0) throw new Exception("boom!") 
+  else boom(x - 1) +1
+  }
+boom: (x: Int)Int
+
+scala> boom(5)
+java.lang.Exception: boom!
+  at .boom(<console>:12)
+  at .boom(<console>:12)
+  at .boom(<console>:12)
+  at .boom(<console>:12)
+  at .boom(<console>:12)
+  at .boom(<console>:12)
+  ... 28 elided
+```
+
+这个函数本质上不是一个尾递归，因为在最后调用时对`boom(x - 1)`做了`+1`操作，不是`直接调用`。
+
+```scala
+scala> def bang(x: Int): Int = {
+     | if (x == 0) throw new Exception("bang!")
+     | else bang(x - 1)
+     | }
+bang: (x: Int)Int
+
+scala> bang(5)
+java.lang.Exception: bang!
+  at .bang(<console>:12)
+  ... 28 elided
+```
+
+这一次，您只看到`bang`的一个堆栈帧。您可能认为`bang`在调用自己之前就崩溃了，但事实并非如此。如果您认为在查看堆栈跟踪时可能会被尾部调用优化弄糊涂，那么您可以通过向`scala shell`或`scalac`编译器提供以下参数来关闭它们。
+
+```bash
+-g:notailcalls
+```
+
+**尾递归的限制**
+
+Scala中尾递归的使用相当有限，因为JVM指令集使得实现更高级形式的尾递归非常困难。**Scala只优化直接递归回调用相同函数的调用**。如果递归是间接的，就像下面两个相互递归的函数一样，那么就不可能进行优化。
