@@ -1952,3 +1952,101 @@ res11: Int = 2
 scala> incr9999(1)
 res12: Int = 10000
 ```
+
+### 8.8 特殊的函数调用
+
+函数调用是Scala编程的核心。下面介绍一些特殊的函数调用。
+
+#### 8.8.1 重复参数
+
+参数的数量不固定：
+
+```scala
+scala> def echo(args: String*) = for(arg <- args) println(arg)
+echo: (args: String*)Unit
+
+scala> echo("one")
+one
+
+scala> echo("two", "three")
+two
+three
+```
+
+在函数内部，重复参数的的类型为参数声明类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
+
+```scala
+scala> val arr = Array("One", "Two", "Three")
+arr: Array[String] = Array(One, Two, Three)
+
+scala> echo(arr)
+<console>:14: error: type mismatch;
+ found   : Array[String]
+ required: String
+       echo(arr)
+            ^
+```
+
+为了能正常调用，需要按照下面的写法：
+
+```scala
+scala> echo(arr: _*)
+One
+Two
+Three
+```
+
+这种表示法告诉编译器将arr的每个元素作为它单个参数传递给echo，而不是将所有元素作为单个参数传递。
+
+#### 8.8.2 具名参数
+
+传入具名参数，可以在给出参数名的前提下，位置不受限制。
+
+```scala
+scala> def speed(distance: Float, time: Float): Float = {
+     | if (time != 0) distance / time
+     | else 0
+     | }
+speed: (distance: Float, time: Float)Float
+
+scala> speed(100, 10)
+res2: Float = 10.0
+
+scala> speed(time = 10, distance = 100)
+res3: Float = 10.0
+```
+
+使用指定的参数调用，可以在不改变含义的情况下反转参数。
+
+#### 8.8.3 默认参数
+
+Scala允许您为函数参数指定默认值。在函数调用中可以选择省略此类参数的参数，在这种情况下，相应的参数将使用默认值填充。
+
+```scala
+scala> def printTime(out: java.io.PrintStream = Console.out) =
+     | out.println("time = " + System.currentTimeMillis())
+printTime: (out: java.io.PrintStream)Unit
+
+scala> printTime() //不传入参数，会使用默认参数
+time = 1588068428131
+
+scala> printTime(Console.err) //使用传入的参数
+time = 1588068556370
+```
+
+设置两个默认参数：
+
+```scala
+scala> def printTime(out: java.io.PrintStream = Console.out, devisor: Int = 1) =
+     | out.println("time = " + System.currentTimeMillis()/devisor)
+printTime: (out: java.io.PrintStream, devisor: Int)Unit
+
+scala> printTime()
+time = 1588132268000
+
+scala> printTime(devisor = 100)
+time = 15881322770
+
+scala> printTime(Console.err)
+time = 1588132302797
+```
