@@ -2462,3 +2462,84 @@ java.lang.ArithmeticException: / by zero
 
 scala> byNameAssert(x / 0 == 0)
 ```
+
+## 10 组合与继承
+
+组合：一个类可以包含对另一个类的引用，利用这个被引用的来帮助完成任务；继承：超类/子类的关系。
+
+### 10.1 一个二维的布局类库
+
+创建一个用于构建和渲染二维布局元素的类库，以此作为本章的示例。每个元素标识一个文本填充的长方形。类库将提供名为`“elem”`的工厂方法，从传入的数据构造新的元素。例如用下面这个签名的工厂方法创建一个包含字符串的布局元素：
+
+```scala
+elem(s: String): Element
+```
+
+用一个名为`Element`的类型对元素建模。可以对一个元素调用above或beside，传入另一个元素，来获取一个将两个元素结合在一起的新元素。下面将创建一个有两列组成的更大的元素。每列高度都为2：
+
+```scala
+val column1 = elem("hello") above ("***")
+val column2 = elem("***") above("world")
+column1 beside column2
+
+hello ***
+*** world
+```
+
+布局元素很好地展示了这样一个系统，在这个系统中，对象可以通过组合操作符的帮助由简单的部件构建出来。本章将定义那些可以从数组、线和矩形构造出元素对象的类。
+
+### 10.2 抽象类
+
+首先定义一个`Element`类型，用来表示元素。由于元素是一个有字符组成的二维矩形，用一个成员`contents`来表示某个布局元素的内容是合情合理的。内容可以用字符串的数组表示，每个字符串代表一行，因此`contents`返回的结果类型将会是`Array[String]`。
+
+```scala
+abstract class Element{
+  def contents: Array[String]
+}
+```
+
+`contents`被声明为没有实现的方法，这是`Element`的抽象成员。`一个包含抽象成员的类本身也要是抽象的`。`abstract`修饰符表名该类可以拥有那些没有实现的抽象成员。因此，`Element不能直接实例化为一个抽象类`。
+
+```scala
+scala> new Element
+<console>:13: error: class Element is abstract; cannot be instantiated
+       new Element
+       ^
+```
+
+**注意**，`Element`类中的`contents`定义前面没有加上`abstract`修饰符。`一个没有实现方法（即没有等号或方法体），那么他就是抽象的`。与Java不同，我们不需要加上`abstract`修饰符，那些给出了实现的方法被称为`具体(concrete)方法`。
+
+### 10.3 定义无参方法
+
+```scala
+abstract class Element{
+  def contents: Array[String]
+  def height: Int = contents.length
+  def width: Int = if (height == 0) 0 else contents(0).length
+}
+```
+
+以上3个方法都没有参数列表，这样的`无参方法(parameterless method)`在Scala中很常见。与此对应，那些定义为空的圆括号定义的方法，比如`def height(): Int`被称为`空圆括号方法(empty-paren method)`。
+
+**推荐的做法事对于没有参数且只通过读取所在对象字段的方式访问可变状态（确切地说不改变状态）的情况下尽量使用无参方法**。这样做法被称为`统一访问原则`：使用方代码不应受到某个属性是用字段还是方法实现的影响。
+
+完全可以把上述height和width实现为字段，就把def换成val即可。
+
+```scala
+abstract class Element{
+  def contents: Array[String]
+  val height: Int = contents.length
+  val width: Int = if (height == 0) 0 else contents(0).length
+}
+```
+
+从使用方来说，两者完全等价。字段可能比方法稍微更快，因为字段在类初始化时就已经计算好了，而不是每次方法调用时都要重新计算。`核心点在于Element类的使用方不应该被内部实现的变化所影响`。
+
+Scala对于混用无参方法和空括号方法处理比较灵活，两个可以相互重写。从原理上讲，可以对所有无参函数的调用去掉空括号。但是，Scala鼓励我们将那些`不接收参数也没有副作用的方法定义为无参方法`，如果`有副作用的方法，不应该省略空括号`。如下：
+
+```scala
+"hello".length //没有()，因为没有副作用
+println() // 最好别省去()
+```
+
+换句话讲，如果你调用的这个函数执行了某个操作就加上空括号，如果仅仅访问该函数的某个属性，则可以省去空括号。
