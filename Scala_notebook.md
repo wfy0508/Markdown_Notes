@@ -2394,10 +2394,10 @@ withPrintWriter的第二个参数列表，需要传入一个类型为`1PrintWrit
 下面我们定义一个不使用传名函数的断言：
 
 ```scala
-var assertionEnabled = true
+var assertionsEnabled = true
 
 def myAssert(predicate: () => Boolean) = {
-  if (assertionEnabled && !predicate())
+  if (assertionsEnabled && !predicate())
     throw new AssertionError
 }
 ```
@@ -2423,11 +2423,42 @@ scala> myAssert(5 > 3)
 
 ```scala
 def byNameAssert(predicate: => Boolean) = {
-  if (assertionEnabled && !predicate)
+  if (assertionsEnabled && !predicate)
     throw new AssertionError
 }
+
+byNameAssert: (predicate: => Boolean)Unit
 
 scala> byNameAssert(5 > 3) //不会有问题
 ```
 
-对于传名类型而言，空的参数列表
+**`对于传名类型而言，空的参数列表，即()，是去掉的，这样的类型只能用于参数声明，并不存在传名变量或传名字段`**。
+
+你可能会很好奇，为什么不能像如下定义，直接省去`=>`：
+
+```scala
+def boolAssert(predicate: Boolean) = {
+  if (assertionsEnabled && !predicate)
+    throw new AssertionError
+}
+
+boolAssert: (predicate: Boolean)Unit
+```
+
+这样也是可以的，使用起来看上去也没啥区别：
+
+```scala
+boolAssert(5 > 3) //也不会有问题
+```
+
+但是，两种当时有个显著的区别。由于`boolAssert`的参数类型为`Boolean`，在`boolAssert(5 > 3)`圆括号中的表达式将`“先于”`对`boolAssert`的调用被求值，而`byNameAssert`中的类型为`=> Boolean`，`byNameAssert(5 > 3)`圆括号中的表达式在调用`byNameAssert`之前是不会被求值，而是会有一个函数值被创建出来，这个函数值的`apply方法`将会对`5 > 3`求值，传入`byNameAssert`的是这个函数值。
+
+因此，两种方式的区别在于，如果断言被禁用，你将能观察到`boolAssert`的圆括号当中表达式的副作用，而`byNameAssert`则不会，如果断言被禁用，那么我们的断言是`“x / 0 == 0”`的话，`boolAssert`就会抛出异常：
+
+```scala
+scala> boolAssert(x / 0 == 0)
+java.lang.ArithmeticException: / by zero
+  ... 28 elided
+
+scala> byNameAssert(x / 0 == 0)
+```
