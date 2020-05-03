@@ -2123,3 +2123,311 @@ java.lang.Exception: bang!
 **尾递归的限制**
 
 Scala中尾递归的使用相当有限，因为JVM指令集使得实现更高级形式的尾递归非常困难。**Scala只优化直接递归回调用相同函数的调用**。如果递归是间接的，就像下面两个相互递归的函数一样，那么就不可能进行优化。
+
+## 9 控制抽象
+
+### 9.1 减少代码重复
+
+所有的含糊都能被分解成每次函数调用都`一样的公共部分`和每次调用`不一样的非公共部分`。公共部分是函数体，非公共部分必须是通过实参传入。档把函数值作为入参的时候，这段算法的非公共部分又是另一个算法。
+
+每当这样的函数被调用，都可以传入不同的函数值作为实参，被调用的函数会调用传入的函数值。这些`高阶函数`，即那些接收函数作为参数的函数，让你有额外的机会来进一步压缩和简化代码。`高阶函数的好处之一是可以用来创建减少代码重复的控制抽象`。
+
+定义一个查找所有扩展名为`“.scala”`的文件。
+
+```scala
+object FileMatcher{
+  private def filesHere = (new java.io.File(".")).listFiles
+  def filesEnding(query: String){
+    for (file <- filesHere; if file.getName.endsWith(query))
+      yield file
+  }
+}
+```
+
+如果我们要再定义一个查找文件名中包含`“pub”`的文件，需要再定义一个方法：
+
+```scala
+def filesContaining(query: String) = {
+  for (file <- filesHere; if file.getName.contains(query))
+    yield file
+}
+```
+
+这个函数与`filesEnding`运行机制并没有什么区别，如果我们又需要定义一个使用正则表达式匹配的方法：
+
+```scala
+def filesRegex(query: String) = {
+  for (file <- filesHere; if file.getName.matchs(query))
+   yield file
+}
+```
+
+以上三个函数的运行机制非常类似，我们可以通过使用函数值来提供一种方法，`通过传递某个帮你调用方法的函数值来达到目的`。在本例中，可以给方法添加一个mathcer参数，该参数的唯一目的是检查文件名是否满足某个条件。
+
+```scala
+def filesMatching(query: String,
+  matcher: (String, String) => Boolean = {
+    for (file <- filesHere; if matcher(file.getName, query))
+      yield file
+}
+```
+
+有了`fileMatching`，就可以定义不同的搜索方法：
+
+```scala
+def fileEnding(query: String) = {
+  filesMatching(query, _.endWith(_))
+}
+
+def fileContaining(query: String) = {
+  filesMatching(query, _.contains(_))
+}
+
+def fileRegex(query: String) = {
+  filesMatching(query, _.matchs(_))
+}
+```
+
+代码中的前后两个占位符，与`filesMatching`中`matcher(file.getName, query)`顺序一致，`_.endsWith(_)`等同于
+
+```scala
+(fileName: String, query: String) => (fileName.endsWith(query))
+```
+
+这样的写法是因为，这两个参数在函数体内分别只用到一次，`fileName`先被用到，然后是第二个参数`query`。
+
+我们注意到，这里的查询字符串被传入`filesMatching`中后，没有做任何处理，只是传入了`matcher`函数，这样的来回传递是不必要的，完全可以将`query`从`filesMathcing`和`matcher`中移除。
+
+```scala
+object FileMatcher{
+  private def filesHere = (new java.io.File(".")).listFiles
+
+  private def filesMatching(matcher: String => Boolean) = {
+    for (file <- filesHere; if matcher(file.getName))
+      yield file
+  }
+
+  def filesEnding(query: String) =
+    filesMatching(_.endsWith(query))
+  
+  def filesContaining(query: String) =
+    filesMatching(_.contains(query))
+
+  def filesRegex(query: String) =
+    filesMatching(_.mathcs(query))
+}
+```
+
+对于`filesMatching`来说，`query`是从方法的外部定义的，是自由变量而非绑定变量，只需要在函数的外部捕获即可，不需要写入到函数内部。正因为Scala支持闭包，才能将`query`从`filesMatching`中移除掉，从而能进一步简化代码。
+
+### 9.2 简化调用方代码
+
+高阶函数的另一个重要用途是将高阶函数本身放在API当中来让调用方的代码更加精简。
+
+例如，`exists`，这个方法用于判定某个集合是否包含传入的值。我们可以定义一个函数来判定转出的List是否包含负数：
+
+```scala
+def containsNeg(nums: List[Int]): Boolean = {
+  var exists = false
+  for (num <- nums)
+    if (num < 0)
+      exists = true
+  exists
+}
+```
+
+调用时：
+
+```scala
+scala> containsNeg(List(1, 2, -3, 4))
+res0: Boolean = true
+```
+
+不过另一种经精简的定义方式是直接传入高阶函数`exists`:
+
+```scala
+scala> def containsNeg(nums: List[Int]) = nums.exists(_ < 0)
+containsNeg: (nums: List[Int])Boolean
+
+scala> containsNeg(List(1, 2, -3, 4))
+res1: Boolean = true
+```
+
+如果又要编写一个List是否包含偶奇数：
+
+```scala
+scala> def containsOdd(nums: List[Int]) = nums.exists(_ % 2 == 1)
+containsOdd: (nums: List[Int])Boolean
+
+scala> containsNeg(List(1, 2, -3, 4))
+res2: Boolean = true
+```
+
+这个`exists`代表了一种控制抽象，是Scala类库提供的一种特殊用途的循环结构，并不像while或for那样是语言内建的。，不过由于`exists`是Scala集合API中的公共函数，它减少的是调用方的代码重复。 
+
+### 9.3 柯里化
+
+Scala允许创建新的控制抽象，感觉就像语言原生支持一样。尽管目前看到的都是控制抽象，但没人会认为他们是语言原生支持的，为了搞清楚如何做出那些用起来更像是语言扩展的控制抽象，首先要理解一个编程技巧，就是`柯里化(currying)`。
+
+`经过柯里化的函数在应用时支持多个参数列表，而不是一个`。
+
+一个没有经过柯里化的函数：
+
+```scala
+scala> def plainOldSum(x: Int, y: Int) = x + y
+plainOldSum: (x: Int, y: Int)Int
+
+scala> plainOldSum(1, 2)
+res6: Int = 3}
+```
+
+柯里化之后：
+
+```scala
+scala> def curried(x: Int)(y: Int) = x + y
+curried: (x: Int)(y: Int)Int
+
+scala> curried(1)(2)
+res7: Int = 3
+```
+
+第一次接收`x`，第二次接收`y`。当你调用`curriedSum`时，实际上失恋者做了两次传统的函数调用。
+
+```scala
+def curriedSum(x: Int) = (y: Int) => x + y
+```
+
+在一个部分应用函数使用curriedSum时，占位符标识第二个参数，其结果指向一个函数引用：
+
+```scala
+scala> var b = curried(1)_
+b: Int => Int = $$Lambda$1328/746855108@26e588b7
+
+scala> b(2)
+res12: Int = 3
+```
+
+### 9.4 编写新的控制结构
+
+在拥有一等函数的语言中，可以有效地制作出新的控制接口，尽管语言的语法是固定的，需要做的就是创建接受函数作为参数的方法。
+
+重复操作两次，并返回结果：
+
+```scala
+scala> def twice(op: Double => Double, x: Double) = op(op(x))
+twice: (op: Double => Double, x: Double)Double
+
+scala> twice(_ + 1, 5)
+res13: Double = 7.0
+```
+
+每当发现新的控制模式在代码中多次出现时，就应该考虑将这个模式实现为新的控制结构。一种更加常见的编码方式：打开某个资源，对它进行操作，然后关闭该资源，可以用如下方法：
+
+```scala
+def withPrintWriter(file: File, op: PrintWriter => Unit) = {
+  val writer = new PrintWriter(file)
+  try{
+    op(writer)
+  }finally{
+    writer.close()
+  }
+}
+```
+
+有了方法之后，就可以这样使用它：
+
+```scala
+withPrintWriter(
+  new File("date.txt"),
+  writer => writer.println(new java.util.Date)
+)
+```
+
+使用这个方法的好处是，确保文件在最后被关闭的是`withPrintWriter`，而不是用户代码。这样做的好处是不会出现使用者忘记关闭文件的情况。这个技巧被称为`贷出模式(loan pattern)`，因为是某个控制抽象函数，比如`withPrintWriter`，打开一个资源并将该资源`“贷出”`给函数，当函数完成时，它会表明自己不再不要这个`“贷入”`的资源，这时这个资源就会在`finally`中关闭，这样确保不论函数是否返回异常，资源都能被正确的关闭。
+
+可以`使用花括号而不是圆括号来表示参数列表`，这种调用方式看上去更像是`内建的控制结构`。在Scala中，只要那种**只传入一个参数**的方法调用，都可以**使用花括号来讲入参包括起来，而不是圆括号**。
+
+```scala
+scala> println("Hello, World")
+Hello, World
+
+scala> println{"Hello, World"} //只传入了一个参数
+Hello, World
+
+scala> val g = "Hello, world!"
+g: String = Hello, world!
+
+scala> g.substring {7, 9} //传入了两个参数，就不能使用{}代替()
+<console>:1: error: ';' expected but ',' found.
+       g.substring {7, 9}
+                     ^
+
+scala> g.substring (7, 9)
+res16: String = wo
+```
+
+Scala允许用花括号替代圆括号来传入单个参数的目的是为了让调用方在花括号中编写函数字面量。在最新版的`writePrintWriter`中，接收了两个参数，所以不能使用`{}`替代`()`，但是可以使用柯里化将两个参数分开：
+
+```scala
+def withPrintWriter(file: File)(op: PrintWriter => Unit) = {
+  val writer = new PrintWriter(file)
+  try{
+    op(writer)
+  }finally{
+    writer.close()
+  }
+}
+```
+
+这样就可以像下面一样使用，第二个参数列表只有一个参数，可以使用`{}`替代`()`:
+
+```scala
+val file = new File("date.txt")
+
+withPrintWriter(file){writer => writer.println(new java.util.Date)}
+```
+
+### 9.5 传名参数
+
+withPrintWriter的第二个参数列表，需要传入一个类型为`1PrintWriter`的入参，也就是`“writer =>”`，但是如果没有只需要传入花括号中间的代码，应该怎么办？Scala提供了`传名参数`。
+
+下面我们定义一个不使用传名函数的断言：
+
+```scala
+var assertionEnabled = true
+
+def myAssert(predicate: () => Boolean) = {
+  if (assertionEnabled && !predicate())
+    throw new AssertionError
+}
+```
+
+使用时感觉很别扭:
+
+```scala
+myAssert(() => 5 > 3)
+```
+
+大概是不想在函数字面量里`写空的圆括号和=>符号`，而是直接写：
+
+```scala
+scala> myAssert(5 > 3)
+<console>:13: error: type mismatch;
+ found   : Boolean(true)
+ required: () => Boolean
+       myAssert(5 > 3)
+                  ^
+```
+
+传名参数由此而生，要让参数称为传名参数，需要给参数`一个以=>开头的类型声明`，而不是`() =>`，将`predicate`参数转化为传名参数，把类型`“() => Boolean”`改成`“=> Boolean”`:
+
+```scala
+def byNameAssert(predicate: => Boolean) = {
+  if (assertionEnabled && !predicate)
+    throw new AssertionError
+}
+
+scala> byNameAssert(5 > 3) //不会有问题
+```
+
+对于传名类型而言，空的参数列表
