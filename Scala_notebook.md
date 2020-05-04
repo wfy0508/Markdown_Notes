@@ -2543,3 +2543,43 @@ println() // 最好别省去()
 ```
 
 换句话讲，如果你调用的这个函数执行了某个操作就加上空括号，如果仅仅访问该函数的某个属性，则可以省去空括号。
+
+### 10.4 扩展类
+
+前面定义的`Element`，`new Element`是不能使用的，因为`Element`是抽象类。因此要实例化一个元素，需要创建一个扩展自`Element`的子类，并实现`contents`这个抽象方法。
+
+```scala
+class ArrayElement(conts: Array[String]) extends Element{
+  def contents: Array[String] = conts
+}
+```
+
+`extends`子句有两个作用：
+
+- 它使得`ArrayElement`类从`Element`类继承所有非私有的成员；
+- 它也让`ArrayElement`的类型称为`Element`的子类型。
+
+ArrayElement是Element的`子类`，反过来Element是ArrayElement的`超类`。如果不加`extends`，类的定义默认继承自`scala.AnyRef`，这对应于`java.lang.Object`。
+
+继承关系如下图：
+
+```plain txt
+ ┌--------------------┐
+ |       scala        |
+ |       AnyRef       |
+ |<<java.lang.Object>>|
+ └--------------------┘
+           ▲
+           |
+           |
+┌----------------------┐
+|       Element        |
+|     <<abstract>>     |
+└----------------------┘
+           ▲
+           |
+           |
+┌----------------------┐   ┌---------------┐
+|     ArrayElement     |<--| Array[String] |
+└----------------------┘   └---------------┘
+```
