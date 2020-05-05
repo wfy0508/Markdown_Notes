@@ -2668,8 +2668,8 @@ class ArrayElement(
 面向对象的编程让我们很容易用新的数据变种来扩展一个已有的系统，只需要添加子类即可。再定义一个扩展子ArrayElement的LineElement类：
 
 ```scala
-class lineElement(s: String) extends ArrayElement(Array(s)){
-  override def width = s.lenth
+class LineElement(s: String) extends ArrayElement(Array(s)){
+  override def width = s.length
   override def height = 1
 }
 ```
@@ -2703,4 +2703,432 @@ class lineElement(s: String) extends ArrayElement(Array(s)){
 ┌----------------------┐
 |     LineElement      |
 └----------------------┘
+```
+
+### 10.8 使用override修饰符
+
+Scala要求在所有`重写父类具体成员`的成员之前加上`override`修饰符。而如果`不是重写，不能使用override修饰符`。
+
+另外还存在`“不小心出现的重写”`是所谓的`“脆弱基类(frigile base class)”`。就是你对基类添加新成员，有可能和子类中的成员名称冲突。如果在之前基类中没有`hidden方法`，但在子类定义该方法的时候并没有加上`override`标识符，但在第二版修改基类的时候，添加了`hidden方法`，就会对子类产生影响，重新编译代码时编译器就会抛出错误。
+
+### 10.9 多态和动态绑定
+
+在10.4中，定义了一个Element类型的变量e：
+
+```scala
+val e: Element = new ArrayElement(Array("hello"))
+```
+
+类型为Element的变量可以指向一个类型为ArrayElement的对象。这种现象为`多态(polymorphism)`。意思是“多个形状”或“多种形式”。在这个例子中，Element对象可以有许多不同的展现形式。
+
+现在Element有ArrayElement和LineElement两种形式，还可以定义新的Element子类来创建更多形式的Element，例如：
+
+```scala
+class UniformElement(
+  ch: Char,
+  override val width: Int,
+  override val height: Int
+)extends Element{
+  private val line = ch.toString * width
+  def contents = Array.fill(height)(line)
+}
+```
+
+继承关系图如下：
+
+```plain txt
+          ┌----------------------┐
+          |       Element        |
+          |     <<abstract>>     |
+          └----------------------┘
+                      ▲
+                      |
+             ┌----------------┐
+             |                |
+┌------------------┐    ┌----------------┐
+|   ArrayElement   |    | UniformElement |
+└------------------┘    └----------------┘
+           ▲
+           |
+┌----------------------┐
+|     LineElement      |
+└----------------------┘
+```
+
+有了这种继承关系，Scala会接收如下所有赋值，因为赋值表达式会满足定义变量的类型要求：
+
+```scala
+scala> val e1: Element = new ArrayElement(Array("hello", "world"))
+e1: Element = ArrayElement@52bba91a
+
+scala> val ae: ArrayElement = new lineElement(("hello"))
+ae: ArrayElement = lineElement@59c862af
+
+scala> val ae: ArrayElement = new lineElement("hello")
+ae: ArrayElement = lineElement@5ddf5118
+
+scala> val e2: Element = ae
+e2: Element = lineElement@5ddf5118
+
+scala> val e3: Element = new UniformElement('x', 2, 3)
+e3: Element = UniformElement@53202b06
+
+```
+
+如果检查这个继承关系，你会发现这4个val定义当中的每一个而言，`等号右边`的表达式是类型都`位于等号左边`被初始化的val的`类型的下方`。
+
+这也说明对变量和表达式是`动态绑定`。实际`被调用的方法实现`是在`运行时基于对象的类型来决定的，而不是变量或表达式的类型决定的`。为了展现这种行为，将Element中的左右成员去掉，添加一个demo方法，并在ArrayElement和LineElement中复写demo，但在UniformElement中不复写demo方法。
+
+```scala
+abstract class Element{
+  def demo() = {
+    println("Element's implementation invoked")
+  }
+}
+
+class ArrayElement extends Element{
+  override def demo() = {
+    println("ArrayElement's implementation invoked")
+  }
+}
+
+class LineElement extends ArrayElement{
+  override def demo() = {
+    println("LineElement's impelentation invoked")
+  }
+}
+
+class UniformElement extends Element
+```
+
+当把上述4个class的代码录入解释器，在定义一个方法，然后按照下述实例化：
+
+```scala
+scala> def invokeDemo(e: Element) = {e.demo()}
+invokeDemo: (e: Element)Unit
+
+scala> invokeDemo(new ArrayElement)
+ArrayElement's implementation invoked
+
+scala> invokeDemo(new LineElement)
+LineElement's impelentation invoked
+
+scala> invokeDemo(new UniformElement)
+Element's implementation invoked
+```
+
+变量e的类型和表达式在运行时对应实例化的对象。UniformElement没有复写Element中的demo方法，运行时实例化的对象来自Element类的demo实现。
+
+### 10.10 声明final成员
+
+如果基类中定义的`成员不能被子类继承`，可以在成员前面加上`final修饰符`来实现。
+
+```scala
+class ArrayElement extends Element{
+  final override def demo() = {
+    println("ArrayElement's implementation invoked")
+  }
+}
+```
+
+再用相同的代码去定义LineElement时，就会抛出错误，提示不能复写一个final成员：
+
+```scala
+<pastie>:13: error: overriding method demo in class ArrayElement of type ()Unit;
+ method demo cannot override final member
+  override def demo() = {
+               ^
+```
+
+如果还想定义的ArrayElement没有子类，可以在ArrayElement定义前加上final标识符：
+
+```scala
+final class ArrayElement extends Element{
+  override def demo() = {
+    println("ArrayElement's implementation invoked")
+  }
+}
+```
+
+使用相同的代码定义LineElement，就会抛出不能继承一个类型为final的类：
+
+```scala
+<pastie>:12: error: illegal inheritance from final class ArrayElement
+class LineElement extends ArrayElement{
+                          ^
+```
+
+### 10.11 使用组合和继承
+
+如果主要追求的是代码复用，一般来说应当`优先使用组合而不是继承`。`只有继承才会受到弱基类问题的影响`，会在修改积累代码的时候不小心破坏了子类的代码。
+
+也就是LineElement不要继承自ArrayElement而是继承自Element。修改后的继承关系如下：
+
+```plain txt
+            ┌----------------------┐
+            | Element <<abstract>> |
+            └----------------------┘
+                       ▲
+                       |
+      ┌--------------------------------┐
+      |                |               |
+┌------------┐ ┌---------------┐ ┌------------┐
+|ArrayElement| |UniformElement | |LineElement|
+└------------┘ └---------------┘ └------------┘
+```
+
+### 10.12 实现above、beside和toString
+
+首先实现Element的above方法：
+
+```scala
+def above(that: Element): Element = {
+  new ArrayElement(this.contents ++ that.contents)
+}
+```
+
+其中`++`操作是将两个数组拼接在一起。Scala的数组由Java的数组表示的，不过Scala数组也可以被转换成`scala.Seq`。
+
+再来实现beside：
+
+```scala
+def beside(that: Element): Element = {
+  val contents = new Array[String](this.contents.length)
+  for (i <- 0 until this.contents.length)
+    contents(i) = this.contents(i) + that.contents(i)
+  new ArrayElement(contents)
+}
+```
+
+上面代码为指令式编写，可以换一种更为简洁的方法：
+
+```scala
+new ArrayElement(
+  for ((line1, line2) <-this.contents zip that.contents))
+    yield line1 + line2
+)
+```
+
+zip将this.contents和that.contents这两个数组转换为对偶（即Tuple2）数组，选取两个数组中对应位置上的值，组装成一个对偶(pair)数组。
+
+```scala
+scala> Array(1, 2, 3) zip Array(4, 5, 6)
+res7: Array[(Int, Int)] = Array((1,4), (2,5), (3,6))
+
+scala> Array(1, 2, 3) zip Array(4, 5)
+res0: Array[(Int, Int)] = Array((1,4), (2,5))
+```
+
+如果数组长度不一致，zip将会扔掉多余的元素，第二个例子中3被丢掉了。
+
+最后实现toString方法：
+
+```scala
+override def toString = contents.mkString "\n"
+```
+
+到目前为止，Element类实现如下：
+
+```scala
+abstract class Element{
+  def contents: Array[String]
+
+  def width: Int = if (height == 0) 0 else contents.length
+
+  def height: Int = contents.length
+
+  def above(that: Element): Element = {
+    new ArrayElement(that.contents ++ this.contents)
+  }
+
+  def beside(that: Element): Element = {
+    new ArrayElemnt(
+      for (
+        (line1, line2) <- that.contents zip this.contents
+      ) yield line1 + line2
+    )
+  }
+
+  override def toString = contents.mkString "\n"
+}
+```
+
+### 10.13 定义工厂对象
+
+现在已经拥有一组用于布局元素的类，可以“原样”展现给使用方，不过你可能想把继承关系藏在一个工厂对象背后。
+
+工厂对象包含创建其他对象的方法。使用这些工厂方法来构造对象，而不是直接用new构建对象。这种做法的好处是对象创建逻辑可以被集中起来，而对象是如何用具体的类表示的可以被隐藏起来。这样既可以让你的类库更容易被对方理解，因为暴露的更少，同时还提供了更多的机会让你在未来在不破坏使用方代码的前提下改变类库的实现。
+
+为布局元素构建工厂方法，直接的方案是常见一个`Element类的伴生对象`，作为布局元素的工厂对象。这样你只需要暴露Element这组类/对象给使用方，并将ArrayElement、LineElement和UniformElement隐藏起来。
+
+```scala
+object Element{
+  def elem(contents: Array[String]): Element = {
+    new ArrayElement(contents)
+  }
+
+  def elem(chr: Char, width: Int, height: Int): Element = {
+    new UniformElement(chr, width, height)
+  }
+
+  def elem(ling:String): Element = {
+    new LineElement(line)
+  }
+}
+```
+
+创建这些工厂方法之后，我们要为Element的定义做出一些改变，让它用工厂方法而不是直接显式地创建ArrayElement。为了在调用工厂方法时不显式地给出Element这个单例对象名称的限定词，在源码头处引入Element.elem，也就是在Element中不再用Element.elem来调用工厂方法，而是引入Element.elem后直接使用elem。
+
+```scala
+import Element.elem
+
+abstract class Element{
+  def contents: Array[String]
+
+  def width: Int = if (height == 0) 0 else contents.length
+
+  def height: Int = contents.length
+
+  def above(that: Element): Element = {
+    elem(that.contents ++ this.contents)
+  }
+
+  def beside(that: Element): Element = {
+    elem(
+      for (
+        (line1, line2) <- that.contents zip this.contents
+      ) yield line1 + line2
+    )
+  }
+
+  override def toString = contents.mkString "\n"
+}
+```
+
+有了工厂方法之后，ArrayElement、LineElement和UniformElement可以变为私有的，因为不再被使用方直接调用了。在Scala中，可以在其他类或者单例对象中定义类和单例对象。将Element子类变为私有的方式之一是把它们放在Element单例对象中，并声明为私有。
+
+```scala
+object Element{
+  private class ArrayElement(
+    val contents: Array[String]
+  ) extends Element
+
+  private class LineElement(s: String) extends Element{
+    val contents = Array(s)
+    override def width = s.length
+    override def height = 1
+  }
+
+  private class UniformElement(
+    ch: Char,
+    override val width: Int,
+    override val height: Int
+  )extends Element{
+    private val line = ch.toString * width
+    def contents = Array.fill(height)(line)
+  }
+
+  def elem(contents: Array[String]): Element = {
+    new ArrayElement(contents)
+  }
+
+  def elem(chr: Char, width: Int, height: Int): Element = {
+    new UniformElement(chr, width, height)
+  }
+
+  def elem(line: String): Element = {
+    new LineElement(line)
+  }
+}
+```
+
+### 10.14 增高和增宽
+
+最后还需要一个增强，因为Element并不是很够用，因为它不允许使用方将不同宽度的元素叠加在一起，或者将不同高度的元素并排放置。例如下面求值不能正常工作。
+
+```scala
+new ArrayElement(Array("hello")) above
+new ArrayElement(Array("world!"))
+```
+
+我们在定义一个私有的助手方法widen和heighten，使得宽度或高度不同的元素，短的通过添加空格来补齐宽度。
+
+```scala
+import Element.elem
+
+abstract class Element{
+  def contents: Array[String]
+
+  def width: Int = if (height == 0) 0 else contents.length
+
+  def height: Int = contents.length
+
+  def above(that: Element): Element = {
+    val this1 = this widen that.width
+    val that1 = that widen this.width
+    elem(this1.contents ++ that1.contents)
+  }
+
+  def beside(that: Element): Element = {
+    val this1 = this heighten that.width
+    val that1 = that heighten this.width
+    elem(
+      for (
+        (line1, line2) <- this1.contents zip that1.contents
+      ) yield line1 + line2
+    )
+  }
+  
+  def widen(w: Int): Element = {
+    if (w <= width) this
+    else {
+      val left = elem(' ', (w - width) / 2, height)
+      val right = elem(' ', w - width - left.width, height)
+      left beside this beside right
+    }
+  }
+
+  def heighten(h: Int): Element = {
+    if (h <= height) this
+    else {
+      val top = elem(' ', width, (h - height) / 2)
+      val bot = elem(' ', width, h - height - top.height)
+      top above this above bot
+    }
+  }
+
+  override def toString = contents mkString "\n"
+}
+```
+
+### 10.15 放在一起
+
+练习使用布局类库的几乎所有元素的趣味方式编译一个给定的边数绘制螺旋程序。
+
+```scala
+import Element.elem
+
+object Spiral {
+  val space = elem(" ")
+  val corner = elem("+")
+  def spiral(nEdges: Int, direction: Int): Element = {
+    if (nEdges == 1) elem("+")
+    else {
+      val sp = spiral(nEdges - 1, (direction + 3) % 4)
+      def verticalBar = elem('|', 1, sp.height)
+      def horizontalBar = elem('-', sp.width, 1)
+      if (direction == 0)
+        (corner beside horizontalBar) above (sp beside space)
+      else if (direction == 1)
+             (sp above space) beside (corner above verticalBar)
+      else if (direction == 2)
+                (space beside sp) above (horizontalBar beside corner)
+      else (verticalBar above corner) beside (space above sp)
+    }
+  }
+  def main(args: Array[String]) = {
+    val nSides = args(0).toInt
+    println(spiral(nSides, 0))
+  }
+}
 ```
