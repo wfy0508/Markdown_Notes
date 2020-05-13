@@ -3132,3 +3132,96 @@ object Spiral {
   }
 }
 ```
+
+## 11 Scala层级结构
+
+在Scala中，每个类都继承自一个名为`Any`的公共超类。任何类都是`Any`的子类，任何对象都可以调用在Any中定义的方法。Scala还在底层定义了一些有趣的类，`Null`和`Nothing`，来充当公共子类。
+
+### 11.1 Scala类的层次结构
+
+顶层的Any类包含了如下定义：
+
+```scala
+final  def ==(that: Any): Boolean
+final def !=(that: Any): Boolean
+def equals(that: Any): Boolean
+def ##: Int
+def hashCode: Int
+def toString: String
+```
+
+由于任何类都是继承于Any，所以Any中定义的这些方法都可以在子类中使用。`==`和`!=`为`final`类型，所以不能在子类中复写。`==`方法本质上与`equals`相同，并且`!=`总是与`equals`相反。
+
+根类Any有两个子类：`AnyVal`和`AnyRef`。`AnyVal`是Scala中value classes的父类。value classes共有9个内置类型：`Byte, Short, Char, Int, Long, Float, Double, Boolean, Unit`，其中的前八个对应于Java的基本类型，它们的值在运行时表示为Java的基本值，在Scala中，这些类的实例会被表示为字面量。另外是，`不能使用new创建这些类的实例`，value classes都定义为既是抽象(abstract)的又是最终(final)的。
+
+```scala
+scala> new Int
+<console>:12: error: class Int is abstract; cannot be instantiated
+       new Int
+       ^
+```
+
+内置类型之前互不为子类，类型之间的转换通过`隐式转换`完成。
+
+### 11.2 基本操作是如何实现的
+
+像加法或乘法这样的标准操作被实现为基本操作。当需要将一个整数需要被看做Java对象时，Scala会使用一个`backup`类`java.lang.Integer`做转换，例如，当对一个整数调用toString方法时，或者当将一个整数赋给一个Any类型的变量时，就会发生这种情况。这种情况类似于Java的`自动装箱和拆箱`，但在Scala中，这种方式更加隐蔽。
+
+```java
+boolean isEqual(int x, int y){
+  return x == y
+}
+
+System.out.println(isEqual(421, 421));
+```
+
+返回`true`;
+
+```java
+boolean isEqual(Integer x, Integer y){
+  return x == y
+}
+
+System.out.println(isEqual(421, 421));
+```
+
+会发现得到结果为`false`。发生的情况是数字421被装箱两次，因此x和y是两个不同的对象。因为`==表示引用类型上的引用相等性`，而Integer是引用类型，所以结果为`false`。
+
+这方面说明Java不是一种纯粹的面向对象语言。基元类型和引用类型之间的差异可以清楚地看到。
+
+再使用Scala尝试：
+
+```scala
+scala> def isEqual(x: Int, y: Int) = x == y
+isEqual: (x: Int, y: Int)Boolean
+
+scala> 421 == 421
+res5: Boolean = true
+
+scala> def isEqual(x: Any, y: Any) = x == y
+isEqual: (x: Any, y: Any)Boolean
+
+scala> 421 == 421
+res6: Boolean = true
+```
+
+Scala中的相等操作==被设计为与类型表示相关的透明操作。对于值类型，它是自然的(数字或布尔)相等性。对于Java装箱的数值类型以外的引用类型，==被视为从对象继承的equals方法的别名。
+
+如果要比较引用相等性，使用`AnyRef`定义的`eq`方法:
+
+```scala
+scala> val x = new String("abc")
+x: String = abc
+
+scala> val y = new String("abc")
+y: String = abc
+
+scala> x == y
+res7: Boolean = true
+
+scala> x eq y
+res8: Boolean = false
+
+scala> x ne y
+res9: Boolean = true
+```
