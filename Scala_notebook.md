@@ -3163,7 +3163,7 @@ scala> new Int
 
 内置类型之前互不为子类，类型之间的转换通过`隐式转换`完成。
 
-### 11.2 基本操作是如何实现的
+### 11.2 基本类型的实现机制
 
 像加法或乘法这样的标准操作被实现为基本操作。当需要将一个整数需要被看做Java对象时，Scala会使用一个`backup`类`java.lang.Integer`做转换，例如，当对一个整数调用toString方法时，或者当将一个整数赋给一个Any类型的变量时，就会发生这种情况。这种情况类似于Java的`自动装箱和拆箱`，但在Scala中，这种方式更加隐蔽。
 
@@ -3224,4 +3224,246 @@ res8: Boolean = false
 
 scala> x ne y
 res9: Boolean = true
+```
+
+### 11.3 底类型(bottom types)
+
+在继承关系的底部，有两个类`scala.Null`和`scala.Nothing`，它们是Scala面向对象的类型系统用于统一处理某些“极端情况”的特殊类型。
+
+`Null`是`null`引用的类型，它是每个应用类的子类。但Null并不兼容于值类型，比如并不能将null赋值给一个整型变量：
+
+```scala
+scala> val i: Int = null
+<console>:11: error: an expression of type Null is ineligible for implicit conversion
+       val i: Int = null
+                    ^
+```
+
+Nothing也是其他类型的子类，不过`并不存在这个类型的任何值`。**`Nothing的用途之一是给出非正常终止的信号`**。Scala标准库中的Predef对象有一个error方法，其定义如下：
+
+```scala
+def error(message: String): Nothing = {
+  throw new RuntimeExpection(message)
+}
+```
+
+error的返回类型为Nothing，这是告诉使用该方法并不会正常返回（会抛出异常）。由于Nothing是每个类型的子类，可以用非常灵活的方式来使用error方法：
+
+```scala
+def divide(x: Int, y: Int): Int = {
+  if (y != 0) x / y
+  else error("can't divide by zero")
+}
+```
+
+### 11.4 定义自己的值类型
+
+可以定义自己的类型来对呢基金按的值类进行扩充，跟内建的值类一样，自定义的值类的实例通常也会编译成那种不使用包装类的Java字节码。在需要包装类的上下文里，比如泛型代码，值将被自动装箱和拆箱。
+
+**只有特定的及各类可以定义为值类。要使得某个类成为值类，他不仅有且仅有一个参数，并且在内部除了def之外不能有任何东西**。不仅如此，也不能有其他扩展自值类，且值类不能重新定义`equals`或`hashCode`。
+
+要定义值类，需要将它处理成`AnyVal`的子类，并在它唯一的参数前加上`val`：
+
+```scala
+class Dollars(val amount: Int) extends AnyVal{
+  override def toString() = "$" + amount
+}
+```
+
+参数amount前面的val，可以让amount参数可以作为字段被外界访问。
+
+```scala
+scala> val money = new Dollars(10000)
+money: Dollars = $10000
+
+scala> money.amount
+res0: Int = 10000
+```
+
+## 12 特质
+
+特质是Scala代码复用的基础单元。特质将方法和字段定义封装起来，然通过将他们混入类的方式来实现复用。它不同于类继承，类继承要求每个子类有明确的的超类，而类可以同时混入任意数量的特质。
+
+### 12.1 特质如何工作
+
+特质的定义和类的定义很像：
+
+```scala
+scala> trait Philosophical{
+     | def philosophize() = {
+     | println("I consume money, therefore I am!")
+     | }
+     | }
+defined trait Philosophical
+```
+
+该特质并没有声明一个超类，因此跟类一样，有一个`默认超类AnyVal`。一旦特质定义好，就可以用`extends`是或`with`关键字将它混入类中。`Scala程序混入(mix in)特质，而不是从特质继承`，因为混入特质跟其他许多编程语言中的多重继承有重要的区别。下面展示一个用混入Philosophical特质的类：
+
+```scala
+scala> class Frog extends Philosophical{
+     | override def toString = "green"
+     | }
+defined class Frog
+```
+
+可以用extends关键字来混入特质，在这种情况下隐式地继承了特质的超类。从特质继承的方法跟从超类继承的方法用起来是一样的。
+
+```scala
+scala> val frog = new Frog
+frog: Frog = green
+
+scala> frog.philosophize
+I consume money, therefore I am!
+```
+
+特质同时也定义了一个类型，以下是Philosophical被用作类型的例子：
+
+```scala
+scala> val phil: Philosophical = frog
+phil: Philosophical = green
+
+scala> phil.philosophize()
+I consume money, therefore I am!
+```
+
+phil的类型为Philosophical，这是一个特质，因此变量phil可以由任何混入了Philosophical的类的对象初始化。
+
+如果想要将特质混入一个显式继承自某个超类的类，可以用extends来给出超类，用with来混入特质，如果想混入更多特质，可以用with子句进行添加：
+
+```scala
+scala> class Animal
+defined class Animal
+
+scala> class Frog extends Animal with Philosophical{
+     | override def toString = "green"
+     | }
+defined class Frog
+
+scala> trait HasLegs
+defined trait HasLegs
+
+scala> class Frog extends Animal with Philosophical with HasLegs{
+     | override def toString = "green"
+     | }
+defined class Frog
+```
+
+Frog类从Philososphical继承了philosophical的实现，Frog也可以重写philosophical，重写语法跟重写超类中声明的方法看上去一样：
+
+```scala
+scala> class Frog extends Animal with Philosophical{
+     | override def toString = "green"
+     | override def philosophize() = {
+     | println("It ain't easy being" + toString + "!")
+     | }
+     | }
+defined class Frog
+```
+
+由于Frog复写了philosophical，再调用时将得到新的行为：
+
+```scala
+scala> val phil: Philosophical = new Frog
+phil: Philosophical = green
+
+scala> phil.philosophize
+It ain't easy being green!
+```
+
+`特质可以声明字段并保持状态，事实上，在特质定义中可以做任何在类定义中做的事，语法也完全相同`。但除了以下两种情况：
+
+- 特质中不能有任何“类”参数（即那些传入类的主构造方法的参数），可以定义这样一个类`class Point(x: Int, y: Int)`，但是不能这样定义一个特质`trait Point(x: Int, y: Int)`，这样会无法编译；
+
+- 另一个是类和特质的区别，在于`类中的super调用时静态绑定`的，而`特质中super是动态绑定的`。类中编写`super.toString()`可以确切地知道实际调用的是哪一个实现的，但每次该特质混入到某个具体的类时，每次调用都要重新判断。
+
+### 12.2 瘦接口和富接口
+
+特质的一个主要用途是自动给类添加基于已有方法的新方法，可以丰富一个瘦接口，让它成为一个富接口。
+
+瘦接口方法少，实现起来简单；富接口方法多，调用方便但实现相对麻烦。
+
+Java的接口一般都是瘦接口，如CharSequence，是一个对所有包含一系列字符的类似字符串的类的通用瘦接口，在Scala中如下定义：
+
+```scala
+scala> trait CharSequence{
+     | def charAt(index: Int):Char
+     | def length:Int
+     | def subSequence(start:Int, end: Int): CharSequence
+     | def toString(): String
+     | }
+defined trait CharSequence
+```
+
+给特质添加方法让瘦接口和富接口之间的取舍变得严重倾向于富接口。不同于Java，`给Scala特质添加具体方法是一次性投入，只需要在特质中实现这些方法一次，而不需要在每个混入特质的类中重新实现一遍`。因此，拥有特质的Scala语言，让富接口实现的代价更小。
+
+用特质来丰富某个接口，只需`定义一个拥有为数不多的抽象方法`（瘦接口）和`一个拥有数量很多的具体方法的特质`，然后将该特质混入到某个类中。
+
+### 12.3 实例：矩形对象
+
+在不使用特质的前提下，定义点和矩形：
+
+```scala
+class Point(x: Int, y: Int)
+
+class Rectangle(val topLeft: Point, val bottomRight: Point){
+  def left = topLeft.x
+  def right = bottomRight.x
+  def width = right - left
+}
+```
+
+还有要定义一个图形组件：
+
+```scala
+abstract class Component{
+  def topLeft: Point
+  def bottomRight: Point
+
+  def left = topLeft.x
+  def right = bottomRight.x
+  def width = right - left
+  // more methods
+}
+```
+
+可以看出Rectangle和Component两者的定义方法有很多相似之处，此时可以通过增值特质来消除重复的代码：
+
+```scala
+trait Rectangler{
+  def topLeft: Point
+  def bottomRight: Point
+
+  def left = topLeft.x
+  def right = bottomRight.x
+  def width = right - left
+  // more methods
+}
+```
+
+然后Rectangle和Component可以混入特质来减少代码数量：
+
+```scala
+abstract class Component extends Rectangler{
+  //other methods
+}
+
+class Rectangle(val topLeft: Point, val bottomRight: Point) extends Rectangler{
+  //other methods
+}
+```
+
+创建一个实例，并查询：
+
+```scala
+scala> val rect = new Rectangle(new Point(1,1), new Point(10, 10))
+rect: Rectangle = Rectangle@66a99584
+
+scala> rect.left
+res1: Int = 1
+
+scala> rect.right
+res2: Int = 10
+
+scala> rect.width
+res3: Int = 9
 ```
