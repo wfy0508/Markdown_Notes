@@ -3467,3 +3467,36 @@ res2: Int = 10
 scala> rect.width
 res3: Int = 9
 ```
+
+### 12.4 Ordered
+
+Scala提供一种特质用于比较两个对象，这个特质叫`Ordered`，使用的方式是将所有单独的比较方法替换成compare方法，Ordered特质提供了<、>、<=和<=，这些方法都是基于提供的compare方法来实现，如果没有使用Ordered特质，那么定义两个对象比较的方法为：
+
+```scala
+class Rational(n: Int, d: Int) {
+  // ...
+  def < (that: Rational) ={
+    this.numer * that.denom < that.numer * this.denom
+  }
+  def > (that: Rational) = that < this
+  def <= (that: Rational) = (this < that) || (this == that)
+  def >= (that: Rational) = (this > that) || (this == that)
+}
+```
+
+使用`Ordered`特质时，只需要定义一个`compare`方法，然后混入到具体类中即可：
+
+```scala
+class Rational(n: Int, d: Int) extends Ordered[Rational]{
+  // ...
+  def compare(that: Rational) = {
+    (this.numer * that.demon) - (that.numer * this.demon)
+  }
+}
+```
+
+有几个需要注意的地方：
+
+- 与其他混入时不同，Ordered要求在混入时，必须传入一个`类型参数`(type paramter)，即`Ordered[C]`，其中C是要比较元素的类型。
+- 第二件事就是定义一个用来比较两个对象的compare方法，该方法应该比较接收者，即this，和作为参数传入该方法的对象。
+- Ordered并不会帮助你定义equals方法，因为它做不到。这当中的问题在于用compare来实现equals需要检查传入对象的类型，对于(Java的)类型擦除机制，Ordered特质自己无法完成这项检查，因此需要自己定义equals方法。
