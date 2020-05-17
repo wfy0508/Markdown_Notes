@@ -3625,3 +3625,86 @@ res2: Int = 1
 scala> queue.get()
 res3: Int = 2
 ```
+
+### 12.6 为什么不使用多重继承
+
+特质与其他语言中的多重继承有这重大区别，有一点特别重要：`对super的解读`。在`多重继承中，super的调用在调用发生的地方就已经确定了`。而`特质中super的调用的方法取决于类和混入该类特质的`**线性化**。正是这样，让前述的叠加修改成为可能。
+
+前述的叠加修改，如果不是特质而是使用多重继承：
+
+```scala
+val q = new BasicIntQueue with Incrementing with Doubling
+q.put(42) //应该会调用哪个put
+```
+
+这次调用执行的是Increamenting和Doubling两个中的哪个put？也许Doubling中的put被执行，输入的数据翻倍，调用了`super.put`，然后结束，不会再执行Increamenting中的`super.put`。
+
+也许还可以让程序员自己指定调用super是到底使用哪个超类的方法：
+
+```scala
+trait MyQueue extends BasicIntQueue with Incrementing with Doubling{
+  def put(x: Int) = {
+    Increamenting.super.put(x) //并非真正的代码
+    Doubling.super.put()
+  }
+}
+```
+
+这样做的可能是put方法被调用两次，不过两次都不是用加1或翻倍后的值调用的。总之来说，多重继承没有很好的解决方案。
+
+相较而言，Scala特质的解决方案直截了当，只需将特质简单的混入类中即可。与多重继承相比，特质的区别在于`线性化`。Scala会将类及他所有继承的类和特质都拿出来，将它们线性的排列在一起。然后，当在某一个类中调用super时，被调用的方法是这个链条中向上最近的那个。如果出最后一个方法外，所有的方法都以调用了super，那么最终的结果就是叠加在一起的行为。
+
+> 在任何线性化中，类总是位于所有它的超类和混入特质之前，因此，当你写下`调用super的方法`时，那个`方法绝对在修改超类和混入特质的行为`，而不是反过来。
+
+下面我们举例，有一个Cat类，继承自超类Animal，又混入Furry和Fourlegged两个特质，Fourlegged又扩展自HasLegs：
+
+```scala
+class Animal
+trait Furry extends Animal
+trait HasLegs extends Animal
+trait Fourlegged extends HasLegs
+class Cat extends Animal with Furry with Fourlegged
+```
+
+Cat的线性化从后往前计算过程如下。Cat线性化的最后一部分是其Animal的线性化：
+
+```plaintxt
+Animal --> AnyRef --> Any
+```
+
+第2个是混入的特质Furry：
+
+```plaintxt
+Furry --> Animal --> AnyRef --> Any
+```
+
+第3个是混入的特质Fourlegged：
+
+```plaintxt
+Fourlegged --> HasLegs --> Furry --> Animal --> AnyRef --> Any
+```
+
+最后线性化的是Cat自己：
+
+```plaintxt
+Cat --> Fourlegged --> HasLegs --> Furry --> Animal --> AnyRef --> Any
+```
+
+所以Cat类的继承关系和实例化如下：
+
+|类型|线性化|
+|--|--|
+Animal|Animal、AnyRef、Any
+Furry|Furry、Animal、AnyRef、Any
+Fourlegged|Fourlegged、HasLegs、Animal、AnyRef、Any
+HasLegs|HasLegs、Animal、AnyRef、Any
+Cat|Cat、Fourlegged、HadLegs、Furry、Animal、AnyRef、Any
+
+当这些类和特质中的任何一个通过super调用某个方法时，被调用是在线性化链条中出现在其右侧的首个实现。
+
+### 12.7 要特质还是不要特质
+
+- 如果某个行为不会被复用，用具体类。
+- 如果某个行为可能被用于多个互不相关的类，用特质。只有特质才能被混入类继承关系中位于不同组成部分的类。
+- 如果想要从Java代码中继承某个行为，用抽象类。从Java类继承特质比较别扭，且带有实现的特质并没有与之贴近的Java类比。
+- 如果计划将某个行为以编译好的形式分发，且预期会有外部的组织编写继承自它的类，可能更倾向于使用抽象类。
