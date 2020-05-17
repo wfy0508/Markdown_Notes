@@ -3500,3 +3500,128 @@ class Rational(n: Int, d: Int) extends Ordered[Rational]{
 - 与其他混入时不同，Ordered要求在混入时，必须传入一个`类型参数`(type paramter)，即`Ordered[C]`，其中C是要比较元素的类型。
 - 第二件事就是定义一个用来比较两个对象的compare方法，该方法应该比较接收者，即this，和作为参数传入该方法的对象。
 - Ordered并不会帮助你定义equals方法，因为它做不到。这当中的问题在于用compare来实现equals需要检查传入对象的类型，对于(Java的)类型擦除机制，Ordered特质自己无法完成这项检查，因此需要自己定义equals方法。
+
+### 12.5 作为可叠加修改的特质
+
+特质的一个重要用途是`将瘦接口转化为富接口`，另外还有一个用途是`为类提供可叠加的修改`。特质让你修改类的方法，而它们的实现方式允许你将这些修改叠加起来。
+
+对某个整数队列叠加修改，队列有两个操作：put和get。给定一个实现了这样一个队列的类，可以定义一些特质来执行以下修改：
+
+- Doubling：将放入队列的元素翻倍；
+- Incrementing：将放入队列的元素+1；
+- Filtering：从队列去除负数。
+
+首先，定义一个抽象类：
+
+```scala
+abstract class IntQueue{
+  def get(): Int
+  def put(x: Int)
+}
+```
+
+再定义一个使用ArrayBuffer的IntQueue的基本实现：
+
+```scala
+import scala.collection.mutable.ArrayBuffer
+
+class BasicIntQueue extends IntQueue{
+  private val buf = new ArrayBuffer[Int] //数组缓冲
+  def get() = buf.remove(0)
+  def put(x: Int) = buf += x
+}
+
+scala> val queue = new BasicIntQueue
+queue: BasicIntQueue = BasicIntQueue@2419fe6f
+
+scala> queue.put(10)
+
+scala> queue.put(20)
+
+scala> queue.get()
+res2: Int = 10
+```
+
+如何用特质修改这个行为？给每个放入的元素加倍：
+
+```scala
+trait Doubling extends IntQueue{
+  abstract override def put(x: Int) = (super.put(2 * x))
+}
+```
+
+该特质首先`声明一个超类IntQueue`，这个声明意味着这个特质`只能被混入同样继承自IntQueue的类`。因此可以混入BasicIntQueue，但不能混入Rational。
+
+另外一个需要注意的是，在特质中做了一个super调用，对于普通的类，这样做是非法的，运行时会失败。但在特质中是可以成功的，由于`特质中的super调用时动态绑定的，只要在给出了该方法的具体定义的特质或类之后混入`，Doubling中的super调用就可以正常工作。
+
+为了实现可叠加的特质，且为了告诉编译器是特意这样做的，必须将这样的方法标记为abstract override，该修饰符组合`只允许用在特质的成员上，不允许用在类的成员上`，它的含义是该特质`必须混入某个拥有该方法的具体定义的类中`。
+
+```scala
+scala> class MyQueue extends BasicIntQueue with Doubling
+defined class MyQueue
+
+scala> val queue = new MyQueue
+queue: MyQueue = MyQueue@105e8710
+
+scala> queue.put(10)
+
+scala> queue.get() //由于特质Doubling的混入，放入的10被翻倍了
+res6: Int = 20
+```
+
+由于MyQueue没有定义新的代码，这时也可直接实例化BasicIntQueue with Doubling：
+
+```scala
+scala> val queue = new BasicIntQueue with Doubling
+queue: BasicIntQueue with Doubling = $anon$1@2411cf8b
+
+scala> queue.put(100)
+
+scala> queue.get()
+res8: Int = 200
+```
+
+为了搞清楚叠加修改，我们再定义Incrementing和Filtering两个特质：
+
+```scala
+trait Incrementing extends IntQueue{
+  abstract override def put(x: Int) = {super.put(x + 1)}
+}
+
+trait Filtering extends IntQueue{
+  abstract override def put(x: Int) = {if(x >= 0) super.put(x)}
+}
+```
+
+将这俩这特混入类中：
+
+```scala
+scala> val queue = new BasicIntQueue with Incrementing with Filtering
+queue: BasicIntQueue with Incrementing with Filtering = $anon$1@6141c271
+
+scala> queue.put(-1)
+
+scala> queue.put(1)
+
+scala> queue.get() 
+res11: Int = 2 //由于Incrementing特质的混入，给1做了加1操作
+//  且由于Filtering的因素，-1没有被放到队列中
+```
+
+混入特质的顺序很重要：**`越靠右出现的特质最先起作用`**。这就是在输入值为-1时，先调用了Filtering将-1直接滤除了，没有放入队列中。如果将两个特质的顺序调换，就会出现如下结果：
+
+```scala
+scala> val queue = new BasicIntQueue with Filtering with Incrementing
+queue: BasicIntQueue with Filtering with Incrementing = $anon$1@64c25a62
+
+scala> queue.put(-1); queue.put(0); queue.put(1)
+
+scala> queue.get()
+res1: Int = 0  //先执行Incrementing，再执行Filtering，-1不会被滤除
+
+scala> queue.get()
+res2: Int = 1
+
+scala> queue.get()
+res3: Int = 2
+```
