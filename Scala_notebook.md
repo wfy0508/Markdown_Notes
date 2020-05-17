@@ -656,7 +656,7 @@ scala> val backslash = '\\'
 backslash: Char = \
 ```
 
-|字面量|含义
+|字面量|含义|
 |--|--|
 |\n |换行 (\u000A)|
 |\b |退格 (\u0008)|
@@ -3205,7 +3205,7 @@ scala> 421 == 421
 res6: Boolean = true
 ```
 
-Scala中的相等操作==被设计为与类型表示相关的透明操作。对于值类型，它是自然的(数字或布尔)相等性。对于Java装箱的数值类型以外的引用类型，==被视为从对象继承的equals方法的别名。
+Scala中的相等操作==被设计为与类型表示相关的透明操作。对于值类型，它是自然的(数字或布尔)相等性。对于Java装箱的数值类型以外的引用类型==，被视为从对象继承的equals方法的别名。
 
 如果要比较引用相等性，使用`AnyRef`定义的`eq`方法:
 
@@ -3690,15 +3690,15 @@ Fourlegged --> HasLegs --> Furry --> Animal --> AnyRef --> Any
 Cat --> Fourlegged --> HasLegs --> Furry --> Animal --> AnyRef --> Any
 ```
 
-所以Cat类的继承关系和实例化如下：
+所以Cat类的继承关系和实例化如下
 
 |类型|线性化|
-|--|--|
-Animal|Animal、AnyRef、Any
-Furry|Furry、Animal、AnyRef、Any
-Fourlegged|Fourlegged、HasLegs、Animal、AnyRef、Any
-HasLegs|HasLegs、Animal、AnyRef、Any
-Cat|Cat、Fourlegged、HadLegs、Furry、Animal、AnyRef、Any
+|----|----|
+|Animal|Animal、AnyRef、Any|
+|Furry|Furry、Animal、AnyRef、Any|
+|Fourlegged|Fourlegged、HasLegs、Animal、AnyRef、Any|
+|HasLegs|HasLegs、Animal、AnyRef、Any|
+|Cat|Cat、Fourlegged、HadLegs、Furry、Animal、AnyRef、Any|
 
 当这些类和特质中的任何一个通过super调用某个方法时，被调用是在线性化链条中出现在其右侧的首个实现。
 
@@ -3708,3 +3708,40 @@ Cat|Cat、Fourlegged、HadLegs、Furry、Animal、AnyRef、Any
 - 如果某个行为可能被用于多个互不相关的类，用特质。只有特质才能被混入类继承关系中位于不同组成部分的类。
 - 如果想要从Java代码中继承某个行为，用抽象类。从Java类继承特质比较别扭，且带有实现的特质并没有与之贴近的Java类比。
 - 如果计划将某个行为以编译好的形式分发，且预期会有外部的组织编写继承自它的类，可能更倾向于使用抽象类。
+
+## 13 包和引入
+
+减少耦合，对构建大型程序是很重要的。低耦合能减少程序某个局部的某个看似乌海的改动对其他部分造成严重后的风险。减少耦合的一宗方式是以模块化的风格编写代码。
+
+### 13.1 将代码放进包里
+
+将类navigator放入bobsrockets.navigation包中。
+
+```scala
+package bobsrockets.navigation
+class navigator
+```
+
+由于Scala代码是Java生态的一部分，建议遵循Java将域名倒过来作为包名的习惯。如com.bobsrockets.navigation。
+
+另一种方式是将代码用{}包括起来。这个语法称为`打包(packaging)`。
+
+```scala
+package bobsrockets.navigation {
+  class navigator
+}
+```
+
+这样的写法，可以让我们在一个文件里包含多个包的内容，举例来说，可以把某个类的测试代码跟源代码放在同一个文件里，不过分成不同的包：
+
+```scala
+package bobsrockets {
+  package navigation {
+    class Navigator
+  }
+  
+  package tests {
+    class NavigatorSuite
+  }
+}
+```
