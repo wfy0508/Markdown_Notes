@@ -3850,3 +3850,104 @@ def showFruit(fruit: Fruit) = {
 ```
 
 `showFruit`中`fruit`是`Fruit`类型，直接导入`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
+
+Scala灵活导入包的方式：
+
+```scala
+import java.util.regex
+
+class AStarB{
+  val pat = regex.Pattern.compile("a*b")
+  //导入后可直接使用regex，而不用全称java.util.regex
+}
+
+import Fruits.{Apple, Orange} //只导入Apple, orange
+import Fruits.{Apple => McIntosh, Orange} //将导入的Apple重命名为McIntosh
+import Fruits.{_} //导入全部成员
+import Fruits.{Apple => McIntosh, _} //导入全部成员，但Apple重命名为McIntosh
+import Fruits.{Pear => _, _} //导入除了Pear之外的全部成员
+//<original-name> => _：代表意思为将某个成员隐藏，不导入
+```
+
+### 13.4 隐式导入
+
+```scala
+import java.lang._ // Scala脚本中，默认导入
+import scala._ // Scala脚本中，默认导入
+import Predef._ // Scala脚本中，默认导入
+```
+
+### 13.5 访问修饰符
+
+包、类或对象的成员可以用访问修饰符`private`和`protected`标记。这些修饰符将对成员的访问限制在代码的某些区域。Scala对访问修饰符的处理大致遵循Java的方法，但是有一些重要的区别，本节将对此进行解释。
+
+#### 13.5.1 Private成员
+
+与Java类似，但是Scala的private成员只能在定义的内部使用，不允许通过`类型.方法名`访问：
+
+```scala
+class Outer{
+  class Inner{
+    private def f() = {println("f")}
+
+    class InnerMost{
+      f() //在Inner内部，可以访问
+    }
+  }
+  (new Inner).f() //不能访问，不在Inner内部
+}
+```
+
+#### 13.5.2 Protected成员
+
+在Scala中，对受保护成员的访问也比在Java中有更多的限制。在Scala中，`受保护成员只能从定义成员的类的子类中访问`。在Java中，这样的访问也可以来自同一个包中的其他类。
+
+```scala
+package p{
+  class Super{
+    protected def f() = {println("f")}
+  }
+
+  class Sub extends Super{
+    f() //可以访问，Sub是Super的子类
+  }
+
+  class Other{
+    (new Super).f() //不能访问，Other不是Super的子类
+  }
+}
+```
+
+### 13.5.3 作用域范围
+
+有访问权限的修饰符为您提供了非常细粒度的控制。
+
+```scala
+package bobsrockets
+package navigation{
+  private[bobsrockets] class Navigator{
+    protected[navigation] def useStarChart() = {}
+    class LegOfJourney{
+      private[Navigator] val distance = 100
+    }
+    private[this] val speed = 200
+  }
+}
+
+package lanuch{
+  import navigation._
+  object Vehicle{
+    private[lanuch] val guide = new Navigator
+  }
+}
+```
+
+- `private[bobsrockets] class Navigator`表示`Navigator`在`bobsrockets`的所有类中均可见。
+- C类中的`protected[X]`允许C中所有子类以及封装的包、类或对象X访问。
+- `protected[navigation] def useStarChart()`允许Navigator的所有子类及nagivation包中的所有代码访问。
+- `private[this] val speed`只能从包含定义的同一对象中访问。
+
+```scala
+val other = new Navigator
+other.speed // 编译报错，
+```
