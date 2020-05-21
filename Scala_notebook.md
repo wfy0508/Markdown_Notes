@@ -3745,3 +3745,108 @@ package bobsrockets {
   }
 }
 ```
+
+### 13.2 对相关代码的精简访问
+
+当代码被划分为包层次结构时，它不仅仅帮助人们浏览代码。它还告诉编译器代码相同包中的代码，某种程度上是相关的。
+
+```scala
+package bobsrockets{
+  package navigation{
+    class Navigator{
+      val map = new StartMap //和StartMap同在一个package中，能直接访问
+    }
+
+    class StartMap
+  }
+
+  class Ship{
+    val nav = new navigation.Navigator 
+    //和navigation同在bobsrockets中，不用写为bobsrockets.navigation.navigator
+  }
+
+  package fleets{
+    class Fleet{
+      def addShip = {
+        new Ship //可直接使用，不用写作bobsrockets.Ship
+      }
+    }
+  }
+}
+```
+
+另外一种情况，分成两个独立的包：
+
+```scala
+package bobsrockets{
+  class Ship
+}
+
+package bobsrockets.fleets{
+  class Fleet{
+    def addShip() = {
+      new Ship //不能编译，跨包引用，得写明全称
+    }
+  }
+}
+```
+
+在定义包时，`bobsrockets和bobsrockets.fleets没有直接的归属关系，是不同的两个包`。
+
+```scala
+package lanuch{
+  class Booster3
+}
+
+package bobsrockets{
+  package navigation{
+    package lanuch{
+      class Booster1
+    }
+
+    class MissionControl{
+      val booster1 = new lanuch.Booster1
+      val booster2 = new bobsrockets.navigation.lanuch.Booster2
+      val booster3 = new _root_.lanuch.Booster3
+    }
+  }
+
+  package lanuch{
+    class Booster2
+  }
+}
+```
+
+Scala提供了一个名为`_root_`的包，它位于用户可以编写的任何包之外。换句话说，您可以编写的每个**顶级包**都被视为`_root_`包的成员。例如，上例中的`launch和bobsrockets都是package的成员_root_`。结果是_root_.launch提供了顶级lanuch包和_root_.launch。Booster3指定了最外层的booster类。
+
+### 13.3 导入(import)
+
+与Java类似，导入子句使包或对象的成员仅凭其名称即可访问，而不需要以包或对象名称作为前缀。这里有一些简单的例子：
+
+```scala
+import bobsdelights.Fruit
+
+import bobsdelights._ //导入bobsdelights下全部成员
+
+import bobsdelights.Fruit._ //导入bobsdelights.Fruit下全部成员
+
+package bobsdelights
+abstract class Fruit(
+  val name: String,
+  val color: String
+)
+
+object Fruit{
+  object Apple extends Fruit("apple", "red"),
+  object Orange extends Fruit("orange", "orange")
+  object Pear extends Fruit("pear", "yellowish")
+  val menu = List(Apple, Orange, Pear)
+}
+
+def showFruit(fruit: Fruit) = {
+  import fruit._
+  println(name + "s are " + color)
+}
+```
+
+`showFruit`中`fruit`是`Fruit`类型，直接导入`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
