@@ -3918,7 +3918,7 @@ package p{
 }
 ```
 
-### 13.5.3 作用域范围
+### 13.5.3 保护范围
 
 有访问权限的修饰符为您提供了非常细粒度的控制。
 
@@ -3945,9 +3945,72 @@ package lanuch{
 - `private[bobsrockets] class Navigator`表示`Navigator`在`bobsrockets`的所有类中均可见。
 - C类中的`protected[X]`允许C中所有子类以及封装的包、类或对象X访问。
 - `protected[navigation] def useStarChart()`允许Navigator的所有子类及nagivation包中的所有代码访问。
-- `private[this] val speed`只能从包含定义的同一对象中访问。
+
+最后，Scala还有一个访问修饰符，它的限制比private还要严格。 标记为`private[this]`的定义只能从包含该定义的`同一对象`中访问。这种定义被称为`对象私有(object-private)`。Navigator中的speed就被定义为这种类型。意味着不仅只能在Navigator中使用，还必须是`同一个实例对象访问`。在Navigator中可以使用`“speed”`或者`“this.speed”`访问，其他形式的访问都是非法的。
 
 ```scala
 val other = new Navigator
-other.speed // 编译报错，
+other.speed // 编译报错
 ```
+
+#### 可见性和伴生对象
+
+涉及到private或protected成员访问时，Scala的访问规则为对象和类提供了特权。`一个类与它的伴生对象共享所有访问权限`，反之亦然。
+
+特别地，一个对象可以访问它的伴生类的所有私有成员，就像一个类可以访问它的伴生对象的所有私有成员一样。
+
+如下面定义，Rocket类和其伴生对象，Rocket类可以访问其伴生对象私有fuel方法，反过来Rocket对象可以访问其伴生类Rocket的私有canGoHomeAgain方法。
+
+```scala
+class Rocket{
+  import Rocket.fuel
+  private def canGoHomeAgain = fuel > 20
+}
+
+object Rocket{
+  private def fuel = 10
+  def chooseStragegy(rocket: Rocket) = {
+    if(rocket.canGoHomeAgain)
+      goHome()
+    else
+      pickAStar()
+  }
+  def goHome() = {}
+  def pickAStar() = {}
+}
+```
+
+### 13.6 包对象
+
+到目前为止，看到添加到包中的代码是类、特质和单例对象。这些是放在包的顶层的最常见的定义。但是Scala并没有限制你只是这样做，在类中的任何类型的定义都可以放在包的顶层。如果有一些帮助器方法，您想要在整个包的范围内，那么就将它放在包的顶层。
+
+为了这样做，可以将其放进`包对象(package object)`中，每个包允许有一个包对象。放在包对象中的任何定义都被认为是包本身的成员。
+
+```scala
+//-------------- bobsdelights/package.scala中代码
+package object bobsdelights{
+  def showFruit(fruit: Fruit) = {
+    import fruit._
+    println(name + "s are " + color)
+  }
+}
+
+//--------------PrintMenu.scala中代码
+package printmenu
+import bobsdelights.Fruits
+import bobsdelights.showFruit
+
+object PrintMenu{
+  def main(args: Array[String]) = {
+    for (fruit <- Fruit.menu){
+      showFruit(fruit)
+    }
+  }
+}
+```
+
+从上述代码中，我们看到在package.scala代码中，定义了一个包对象，与包定义唯一不同的是多了个object限定词。有了这个定义，任何包中的任何其他代码都可以像导入类一样导入这个方法。PrintMenu可以以导入类Fruit的相同方式导入showFruit。
+
+包对象经常用于保存包范围的类型别名(第20章)和隐式转换(第21章)。`顶级scala包有一个包对象，所有scala代码都可以使用它`。
+
+包对象会被编译成名为`Package.class`的类文件，该文件位于包的目录中。对源文件保持相同的约定是很有用的。上面例子中的包对象bobs的源文件会放入名为`package.scala`的文件中，放在`bobsdelights`的目录下。
