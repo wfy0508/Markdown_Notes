@@ -3981,7 +3981,7 @@ object Rocket{
 ```
 
 对于Scala的伴生对象而言，`protected`的成员没有意义，因为`单例对象没有子类`。
-
+-
 ### 13.6 包对象
 
 到目前为止，看到添加到包中的代码是类、特质和单例对象。这些是放在包的顶层的最常见的定义。但是Scala并没有限制你只是这样做，在类中的任何类型的定义都可以放在包的顶层。如果有一些帮助器方法，您想要在整个包的范围内，那么就将它放在包的顶层。
@@ -4016,3 +4016,48 @@ object PrintMenu{
 包对象经常用于保存包范围的类型别名(第20章)和隐式转换(第21章)。`顶级scala包有一个包对象，所有scala代码都可以使用它`。
 
 包对象会被编译成名为`Package.class`的类文件，该文件位于包的目录中。对源文件保持相同的约定是很有用的。上面例子中的包对象bobs的源文件会放入名为`package.scala`的文件中，放在`bobsdelights`的目录下。
+
+## 14 断言和测试
+
+断言和测试是检查软件行为是否符合预期的重要手段。
+
+### 14.1 断言
+
+断言的写法是对预定义方法assert的调用，assert方法定义在Predef的单例对象中。如果`condition`不满足，表达式`assert(condition)`将抛出`AssertionError`。
+
+另一个版本是：`assert(condition, expalanation)`，如果condition条件不满足，就抛出给定explanation的AssertionError，explanation的类型为`Any`，因此`可以传入任何对象`。assert方法将调用expalanation的toString方法来获取一个字符串的解释放入AssertError中。
+
+```scala
+def above(that: Element): Element = {
+  val this1 = this widen that.width
+  val that1 = that widen this.width
+  assert(this1.width == that.width) //增加断言，保证两个元素的宽度一致
+  elem(this1.contents ++ that1.contents)
+}
+
+```
+
+另一种更加精简的定义是使用`Predef`中的`ensuring`方法：
+
+```scala
+private def widen(w: Int): Element = {
+  if (w <= width) this
+  else {
+    val left = elem(' ', (w - width) / 2, height)
+    val right = elem(' ', w - width - left.width, height)
+    left beside this beside right
+  }
+} ensuring (w <= _.width) // _为widen方法的结果，一个Element
+```
+
+ensuring这个方法可以被用于任何结果类型（得益于隐式转换）。如果前提条件返回true，那么ensuring就正常返回，否则抛出AssertionError。
+
+assert可以用JVM命令行参数`-ea`和`-da`来打开和关闭。
+
+### 14.3 用Scala写测试
+
+常用工具有ScalaTest、specs2和ScalaCheck。ScalaTest是最灵活的Scala测试框架：可以很容易地定制它来解决不同的问题。ScalaTest的灵活性意味着团队可以使用任何满足他们需要的测试风格，例如使用JUnit的团对，FunSuite风格是最舒适和熟悉的：
+
+```scala
+
+```
