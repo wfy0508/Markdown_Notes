@@ -4059,5 +4059,61 @@ assert可以用JVM命令行参数`-ea`和`-da`来打开和关闭。
 常用工具有ScalaTest、specs2和ScalaCheck。ScalaTest是最灵活的Scala测试框架：可以很容易地定制它来解决不同的问题。ScalaTest的灵活性意味着团队可以使用任何满足他们需要的测试风格，例如使用JUnit的团对，FunSuite风格是最舒适和熟悉的：
 
 ```scala
+import org.scalatest.FunSuite
+import Element.elem
+class ElementSuite extends FunSuite {
+  test("elem result should have passed width"){
+    val ele = elem('x', 2, 3) //宽度为2，高度为3的元素
+    assert(ele.width == 2)
+  }
+}
+```
 
+### 14.4 详实的失败报告
+
+如果断言失败，失败报告就会包括文件名和该断言所在的行号，以及一条失败的详细信息。
+
+```scala
+scala> val width = 3
+width: Int = 3
+
+scala> assert(width == 2)
+java.lang.AssertionError: assertion failed
+  at scala.Predef$.assert(Predef.scala:208)
+  ... 28 elided
+```
+
+为了在断言失败时提供给描述性的信息，ScalaTest会在编译时分析每次传入assert调用的表达式。如果想要更详细的信息，可以使用ScalaTest的DiagrammedAssertions，其错误消息会显示传入assert的表达式的一张图：
+
+```scala
+scala> assert(List(1, 2, 3).contains(4))
+java.lang.AssertionError: assertion failed
+  at scala.Predef$.assert(Predef.scala:208)
+  ... 28 elided
+```
+
+`assert`仅仅提示左侧和右侧操作元不相等，或者在示意图显示出表达式的值。如果想要强调表达式实际和预期的差别，可以使用`assertResult`方法：
+
+```scala
+assertResult(2){  
+  ele.width
+}
+```
+
+括号内的`2`为预期值，如果为3，则会返回“excepted 2, but got 3”。
+
+如果想要代码抛出某个预期的异常，使用`assertThrows`方法：
+
+```scala
+assertThrows[IlleagalArgumentException]{
+  elem('x', 2, 3)
+}
+```
+
+如果没有抛出异常，或者抛出了跟预期不同的异常，`assertThrows`将以`TestFailedException`异常终止。如果抛出了预期的异常，assertThrows将正常退出。如果想要进一步检视预期的异常，可以使用intercept而不是assertThrows。intercept方法跟assertThrows的运行机制相同，不过当异常被抛出时，intercept将抛出一下异常：
+
+```scala
+cal caught = intercept[ArithmeticException]{1 / 0}
+
+assert(caught.getMessage = "/ by zero")
 ```
