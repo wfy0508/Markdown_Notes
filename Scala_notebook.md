@@ -4117,3 +4117,130 @@ cal caught = intercept[ArithmeticException]{1 / 0}
 
 assert(caught.getMessage = "/ by zero")
 ```
+
+...................................
+
+## 15 样例类和模式匹配
+
+样例类(case class)和模式匹配(pattern matching)，为我们编写规则的，未封装的数据结构提供支持。对于表达树形的递归数据尤其有用。
+
+样例类是Scala用来对对象进行模式匹配而不需要大量的样板代码的方式。如果要做模式匹配，只要在类上加case关键字即可。
+
+### 15.1 一个简单的例子
+
+编写一个操作算术表达式的类库，要先定义输入数据，将注意力集中在由变量，数以及一元和二元操作符组成的算术表达式上。用Scala的层次结构来表达：
+
+```scala
+abstract class Expr
+case class Var(name: String) extends Expr
+case class Number(num: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+```
+
+一个抽象基类和四个子类。
+
+#### 15.1.1 样例类
+
+上面的4个子类前都有`case修饰符`，带有这种修饰符的称为`样例类(case class)`。用上这个修饰符，Scala编译器会对这种类添加一些语法上的便利。
+
+首先，会`添加一个同名的工厂方法`，意味着可以用`Var('x')`来构造一个Var对象，而不用`new Var('x')`
+
+```scala
+scala> val v = Var("x")
+
+v: Var = Var(x)
+```
+
+当需要嵌套时，工厂方法尤为有用，由于代码中不再满处都是new修饰符，一眼就能看明白表达式结构。
+
+```scala
+scala> val op = BinOp("+", Number(1), v)
+
+op: BinOp = BinOp(+,Number(1.0),Var(x))
+```
+
+其次，第二个语法上的便利是`参数列表中的参数都隐式地获得了一个val前缀`，因此它们会被当做字段处理：
+
+```scala
+scala> v.name
+res0: String = x
+
+scala> op.left
+res1: Expr = Number(1.0)
+```
+
+再次，编译器会帮助我们以“自然”的方式实现toString， hashCode和equals方法。
+
+```scala
+scala> println(op)
+BinOp(+,Number(1.0),Var(x))
+
+scala> op.right == Var("x")
+res3: Boolean = true
+```
+
+最后，编译器还会`添加一个copy方法用于制作修改过的拷贝`。可以用于制作除了一两个属性不同之外，其余完全相同的该类的新实例，相当于带名字的参数和缺省参数，只修改其中的一个，不会影响其他参数。
+
+```scala
+scala> op.copy(operator = "-")
+res4: BinOp = BinOp(-,Number(1.0),Var(x))
+```
+
+所以这些带来的大量的便利，代价却很小，编译器会自动添加某些方法。样例类最大的好处是他们支持模式匹配。
+
+#### 15.1.2 模式匹配
+
+加入要简化前面的定义，可以这样做：
+
+```scala
+UpOn("-", UpOn("-", e)) => e
+BinOp("+", e, Number(0)) => e
+BinOp("-", e, Number(0)) => e
+```
+
+用模式匹配的话，这些规则可以看成是一个Scala编写简化函数的核心：
+
+```scala
+def simplify(expr: Expr): Expr = expr match {
+  case UnOp("-", UnOp("-", e)) => e
+  case BinOp("+", e, Number(0)) => e
+  case BinOp("-", e, Number(0)) => e
+  case _ => expr
+}
+
+scala> simplify(UnOp("-", UnOp("-", Var("x"))))
+res5: Expr = Var(x)
+```
+
+`simplify`的右侧由一个`match表达式`组成，match表达式对应Java的`switch`，不过`match关键字出现在选择器表达式后面`，写成：
+
+```plain txt
+选择器 match { 可选分支 }
+```
+
+而不是
+
+```plain txt
+switch ( 选择器 ) { 可选分支 }
+```
+
+模式匹配包含一系列以case关键字打头的可选分支，每一个可选分支都包含一个模式以及一个或多个表达式，如果模式匹配了，这些表达式就会被求值，箭头符号`=>`用于将模式和表达式分开。
+
+#### 15.1.3 对比match和switch
+
+match表达式可以被看做Java风格的switch的广义化。switch可以很自然的使用match表达式表达，其中每个模式都是长亮且最后一个模式是一个通配模式（代表switch中默认case）。
+
+区别如下：
+
+- Scala的match是一个表达式，也就是说它总能得到一个值；
+- Scala的可选分支不会贯穿到下一个case；
+- 如果一个模式都没有匹配上，会抛出名为MatchError的异常，意味着要保证所有的case都被覆盖到，哪怕添加一个什么都不做的缺省case。
+
+```scala
+expr match{
+  case BinOp(op, left, right) => println(expr + " is a binary operation")
+  case _ =>   //这个case是必要的，因为第一个case并不能覆盖全部情况
+}
+
+```
