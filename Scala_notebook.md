@@ -3603,7 +3603,7 @@ scala> queue.put(-1)
 
 scala> queue.put(1)
 
-scala> queue.get() 
+scala> queue.get()
 res11: Int = 2 //由于Incrementing特质的混入，给1做了加1操作
 //  且由于Filtering的因素，-1没有被放到队列中
 ```
@@ -3981,7 +3981,7 @@ object Rocket{
 ```
 
 对于Scala的伴生对象而言，`protected`的成员没有意义，因为`单例对象没有子类`。
--
+
 ### 13.6 包对象
 
 到目前为止，看到添加到包中的代码是类、特质和单例对象。这些是放在包的顶层的最常见的定义。但是Scala并没有限制你只是这样做，在类中的任何类型的定义都可以放在包的顶层。如果有一些帮助器方法，您想要在整个包的范围内，那么就将它放在包的顶层。
@@ -4244,3 +4244,52 @@ expr match{
 }
 
 ```
+
+### 15.2 模式类型
+
+模式的语法比较简单，比如Var(x)匹配任何表达式，把x绑定到变量的名称。
+
+#### 15.2.1 通配符模式
+
+通配符(`_`)可以匹配任何对象:
+
+```scala
+expr match {
+  case BinOp(op, left, right) => println(expr + " is a binary operation")
+  case _ => // handle the default case
+}
+```
+
+通配符还可以用于忽略不关心的对象部分。例如，前面的例子实际上并不关心二元操作符的元素是什么，它只是检查它是否是一个二元操作符。
+
+```scala
+expr match{
+  case BinOp(_, _, _) => println(expr + " is a binary operation")
+  case _ => println("It's something else")
+}
+```
+
+#### 15.2.2 常量模式
+
+`常量模式只匹配自己本身，任何字面量都可以被用作常量`，并且`任何val和单例对象都可以被用作常量`。
+
+```scala
+def describe(x: Any) = x match{
+  case 5 => "five"
+  case true => "truth"
+  case "hello" => "Hi!"
+  case Nil => "the empty list"
+  case _ => "something else"
+}
+
+scala> describe(5)
+res0: String = five
+
+scala> describe("hello")
+res1: String = Hi!
+
+scala> describe(12)
+res2: String = something else
+```
+
+#### 15.2.3 变量模式
