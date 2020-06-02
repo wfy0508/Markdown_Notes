@@ -4293,3 +4293,62 @@ res2: String = something else
 ```
 
 #### 15.2.3 变量模式
+
+变量模式匹配任何对象，就像通配符一样。但与通配符不同的是，`Scala将变量绑定到对象`,然后可以使用此变量对对象进行进一步操作。
+
+```scala
+expr match{
+  case 0 => "zero"
+  case somethingElse => "not zero: " + somethingElse
+}
+```
+
+使用常量还是变量？
+
+常量可以有符号名，比如可以使用`Nil，E，Pi`：
+
+```scala
+import math.{Pi, E}
+
+E match{
+  case Pi => "strange math! Pi = " + Pi
+  case _ => "OK"
+}
+
+res0: String = OK!
+```
+
+Scala怎么知道Pi是一个常量还是被定义的变量？Scala使用了一个简单的词法规则来消除歧义：一个以小写字母开头的简单名称被认为是一个模式变量；所有其他引用都被认为是常量。要查看区别，为pi创建一个小写别名并尝试使用它：
+
+```scala
+val pi = 3.1415926
+
+E match{
+  case pi => "strange math! Pi = " + Pi
+  case _ => "OK"  //编译器会抛出一个告警， warning: unreachable code
+}
+
+res3: String = strange math! Pi = 2.718281828459045
+```
+
+在这里，编译器甚至不允许您添加默认情况。由于pi是一个变量，所以它将匹配所有输入，因此不可能找到它后面的情况（unreachable）。
+
+对于常量模式，也是可以使用小写：
+
+- 首先，如果常量是一个对象的成员，像`pi`是一个变量模式，但是`this.pi`或者`obj.pi`就代表一个常量；
+
+- 如果这不起作用(因为pi是一个局部变量)，可以`将变量名用反引号括起来`。例如，\`pi\` 将再次被解释为一个常数，而不是一个变量。
+
+```scala
+scala> E match {
+  case `pi` => "strange math? Pi = " + pi
+  case _ => "OK"  //不会抛出告警
+}
+
+res1: String = OK
+```
+
+#### 15.2.4 构造器模式
+
+构造函数使模式匹配变得非常强大。一个构造函数模式看起来像`BinOp(“+”，e, Number(0))`。它由一个名称`BinOp`和括号内的一些模式组成:`“+”`、`e`和`number(0)`。假设名称指定了一个case类，这种模式意味着首先检查对象是否是命名的case类的成员，然后检查对象的构造函数参数是否与提供的其他模式匹配。
+
