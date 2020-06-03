@@ -4382,3 +4382,66 @@ expr match{
   case _ =>
 }
 ```
+
+#### 15.2.5 元组模式
+
+```scala
+def tupleDemo(expr: Any) = {
+  expr match{
+    case (a, b, c) => println("matched " + a + b + c)
+    case _=>
+  }
+}
+
+scala> tupleDemo("a ", 3, "-tuple")
+matched a 3-tuple
+```
+
+#### 15.2.6 类型化模式(Typed pattern)
+
+可以使用类型化模式方便地替换类型测试和类型转换。
+
+```scala
+def generalSize(x: Any) = x match{
+  case s: String => s.length
+  case m: Map[_, _] => m.size
+  case _ => -1
+}
+
+scala> generalSize("helloworld")
+res4: Int = 10
+
+scala> generalSize(Map(1 -> 'a', 2 -> 'b'))
+res5: Int = 2
+
+scala> generalSize(math.Pi)
+res6: Int = -1
+```
+
+测试表达式expr的类型：
+
+```scala
+expr.isInstanceOf[String]
+```
+
+转换类型：
+
+```scala
+expr.asInstanceOf[String]
+```
+
+#### 15.2.7 类型擦除
+
+对上述例子中的`Map[_, _]`，指定键和值的类型`Map[Int, Int]`：
+
+```scala
+def isIntIntMap(x: Any) = x match {
+  case m: Map[Int, Int] => m.size
+  case _ => false
+}
+
+Warning:(39, 11) non-variable type argument Int in type pattern scala.collection.immutable.Map[Int,Int] (the underlying of Map[Int,Int]) is unchecked since it is eliminated by erasure
+case m: Map[Int, Int] => m.size
+```
+
+Scala使用泛型的擦除模型，就像Java一样。这意味着在运行时不会维护关于类型参数的信息。在运行时,没有办法确定给定的Map对象是否已经用两个Int参数创建
