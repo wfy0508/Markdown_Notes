@@ -3849,7 +3849,7 @@ def showFruit(fruit: Fruit) = {
 }
 ```
 
-`showFruit`中`fruit`是`Fruit`类型，直接导入`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
+`showFruit`中`fruit`是`Fruit`类型，直接导�������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
 
 Scala灵活导入包的方式：
 
@@ -4444,4 +4444,5 @@ Warning:(39, 11) non-variable type argument Int in type pattern scala.collection
 case m: Map[Int, Int] => m.size
 ```
 
-Scala使用泛型的擦除模型，就像Java一样。这意味着在运行时不会维护关于类型参数的信息。在运行时,没有办法确定给定的Map对象是否已经用两个Int参数创建
+Scala使用泛型的擦除模型，就像Java一样。这意味着在运行时不会维护关于类型参数的信息。在运行时,没有办法确定给定的Map对象是否已经用两个Int参数创建。
+
