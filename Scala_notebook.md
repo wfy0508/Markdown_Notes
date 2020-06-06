@@ -4560,3 +4560,225 @@ res14: Expr = UnOp(+,Number(-123.0))
 scala> simplifyAll(BinOp("*", x, x))
 res16: Expr = BinOp(*,Number(-123.0),Number(-123.0))
 ```
+
+### 15.5 密封类
+
+当模式匹配无法考虑到所有可能的case时，可以添加一个缺省case来做到，但有些场合可能不够合适，因此可以寻求编译器的帮助，会自动检测出match表达式中缺失的模式组合。
+
+将样例类的超类标记为密封(sealed)的。`密封类除了在同一个文件中定义的子类之外，不能添加新的子类`。
+
+定义密封类，只需要在继承关系的顶部的那个`类名前加上sealed关键字`。
+
+```scala
+sealed abstract class Expr //声明为密封类
+case class Var(name: String) extends Expr
+case class Number(num: Double) extends Expr
+case class UnOp(operator: String, arg: Expr) extends Expr
+case class BinOp(operator: String, left: Expr, right: Expr) extends Expr
+
+def descirbe(e: Expr): String = e match{
+  case Number(_) => "a number"
+  case Var(_) => "a variable"
+}
+
+Warning:(7, 33) match may not be exhaustive.It would fail on the following inputs:
+  BinOp(_, _, _),
+  UnOp(_, _)
+def descirbe(e: Expr): String = e match{
+```
+
+这样的警告表示，代码存在产生`MatchError`异常的风险，因为某些可能的模式（UnOp， BinOp）并没有被处理。
+
+但是有的时候我们定义case类，明确的使用场景只有Number和Var，很清楚不会发生`MatchError`错误。这时可以定义一个缺省case，来捕获所有的case：
+
+```scala
+def descirbe(e: Expr): String = e match{
+  case Number(_) => "a number"
+  case Var(_) => "a variable"
+  case _ => throw new RuntimeException //加上之后不会再发生告警，但这个case永远不会执行
+}
+```
+
+有时候这样做也不够理想，因为被迫添加了永远不会被执行的代码，而只是让编译器不再提示告警，一个更为简单的做法是给match选择器部分添加一个@unchecked注解：
+
+```scala
+def descirbe(e: Expr): String = (e: @unchecked) match{
+  case Number(_) => "a number"
+  case Var(_) => "a variable"
+}
+```
+
+如果match表达式的选择器带上了这个注解，那么编译器对后续的模式分支的覆盖完整型检查就会被压制。
+
+### 15.6 Option类型
+
+在Scala中，一个名为Option的标准类型来表示可选值，这样的只可以有两种形式：`Some(x)`，其中x是实际的值，或者`None`对象，代表没有值。
+
+Scala集合类的某些标准操作会返回可选值。比如Map中有一个get方法，当输入的键有对应的值时，会返回`Some(value)`，当传入的键没有对应的值时，会返回`None`：
+
+```scala
+scala> val capital = Map("France" -> "Pairs", "Japan" -> "Tokyo")
+capital: scala.collection.immutable.Map[String,String] = Map(France -> Pairs, Japan -> Tokyo)
+
+scala> capital get "France"
+res17: Option[String] = Some(Pairs)
+
+scala> capital get "America"
+res18: Option[String] = None
+```
+
+### 15.7 到处都是模式
+
+当定义一个val或者var时，都可以用模式而不是简单的标识符，例如：
+
+```scala
+scala> val myTuple = (123, "abc")
+myTuple: (Int, String) = (123,abc)
+
+scala> val (number, string) = myTuple
+number: Int = 123
+string: String = abc
+
+scala> number
+res19: Int = 123
+
+scala> string
+res20: String = abc
+```
+
+将对应位置的值赋值给变量。也可以用`模式析构`：
+
+```scala
+scala> val exp = new BinOp("*", Number(5), Number(1))
+exp: BinOp = BinOp(*,Number(5.0),Number(1.0))
+
+scala> val BinOp(op, left, right) = exp
+op: String = *
+left: Expr = Number(5.0)
+right: Expr = Number(1.0)
+```
+
+#### 15.7.1 作为偏函数的序列
+
+本质上一个case序列就是一个函数字面量，用花括号包起来的一系列case，可以用在任何出现函数字面量的地方。不像普通函数那样，只有一个入口和参数列表，case序列可以有多个入口，而该入口的参数列表用模式来指定。每个入口的逻辑主体是case右边的部分。
+
+```scala
+scala> val withDefault: Option[Int] => Int ={
+     | case Some(x) => x
+     | case None => 0
+     | }
+withDefault: Option[Int] => Int = $$Lambda$1636/374559056@1b08681b
+
+scala> withDefault(Some(10))
+res22: Int = 10
+
+scala> withDefault(None)
+res23: Int = 0
+```
+
+用它来定义Akka中actor的receive方法：
+
+```scala
+var sum = 0
+def receive = {
+  case Data(byte) => sum += byte
+  case GetCheckSum(requester) => 
+    val checksum = ~(sum & 0xFF) + 1
+    requester ! checksum
+}
+```
+
+通过case序列得到的就是一个偏函数。如果将这样一个函数应用到它不支持的值上，它会产生一个运行时异常，例如有一个但会整数列表整第二个元素的偏函数：
+
+```scala
+val second: List[Int] => Int = {
+  case x :: y :: _ => y
+}
+
+warning: match may not be exhaustive.
+It would fail on the following inputs: List(_), Nil
+val second: List[Int] => Int = {
+                               ^
+second: List[Int] => Int = $$Lambda$1665/627852710@477b324e
+```
+
+编译器警告这个函数的匹配不全面，如果传入一个三元素列表，函数会执行成功，如果传入一个空列表，就会抛出一个错误：  
+
+```scala
+scala> second(List(1, 2, 3))
+res24: Int = 2
+
+scala> second(List())
+scala.MatchError: List() (of class scala.collection.immutable.Nil$)
+  at .$anonfun$second$1(<pastie>:12)
+  at .$anonfun$second$1$adapted(<pastie>:12)
+  ... 28 elided
+```
+
+如果想要检查某个偏函数是否对某个入参有定义，必须首先告诉编译器你知道你要处理的是偏函数。`List[Int] => Int`这个类型涵盖了所有从整数列表到整数的函数，不论这个函数是偏函数还是全函数。仅涵盖从整数列表到整数的偏函数的类型写作`PartialFunction[List[Int], Int]`，要重写这个函数：
+
+```scala
+val second: PartialFunction[List[Int], Int] = {
+  case x :: y :: _ => y
+}
+```
+
+偏函数定义了一个`isDefinedAt`方法，可以用来检查该函数时候支持某个特定的值定义。
+
+```scala
+scala> second.isDefinedAt(List(5, 6, 7))
+res26: Boolean = true
+
+scala> second.isDefinedAt(List())
+res27: Boolean = false
+```
+
+`偏函数的典型用例是模式匹配函数字面量`。事实上，这样的表达式会被Scala编译器翻译成偏函数，这样的翻译发生了两次：`一次是实现真正的函数，另一次是测试这个函数事后对指定的值有定义`。
+
+函数字面量`{case x :: y :: _ => y}`将翻译成如下的偏函数值：
+
+```scala
+new PartialFunction[List[Int], Int] {
+  def apply(xs: List[Int}]) = xs match{
+    case x :: y :: _ => y
+  }
+  def isDefinedAt(xs: List[Int]) = xs match {
+    case x :: y :: _ => true
+    case _ => false
+  }
+}
+```
+
+#### 15.7.2 for表达式中的模式
+
+在for表达式中也可以使用模式：
+
+```scala
+for((country, city) <- capitals) 
+  println("The capital of " + country + " is " + city)
+
+The capital of France is Pairs
+The capital of Japan is Tokyo
+```
+
+这个称为对偶模式，很特别的地方是这个匹配永远不会失败。
+
+### 15.8 一个复杂的例子
+
+学习了模式的各种形式之后，编写一个表达式格式化类，以二维布局来显示一个算术表达式，诸如`x / (x + 1)`除法应该纵向打印：
+
+```
+   x
+-------
+ x + 1
+```
+
+另一个例子是，表达式`((a / (b * c) + 1/ n)/ 3)`：
+
+```
+  a      1
+----- + ---
+b * c    n
+-----------
+     3
+```
