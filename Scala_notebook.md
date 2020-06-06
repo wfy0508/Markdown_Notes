@@ -4767,7 +4767,7 @@ The capital of Japan is Tokyo
 
 学习了模式的各种形式之后，编写一个表达式格式化类，以二维布局来显示一个算术表达式，诸如`x / (x + 1)`除法应该纵向打印：
 
-```
+```plain txt
    x
 -------
  x + 1
@@ -4775,10 +4775,179 @@ The capital of Japan is Tokyo
 
 另一个例子是，表达式`((a / (b * c) + 1/ n)/ 3)`：
 
-```
+```plain txt
   a      1
 ----- + ---
 b * c    n
 -----------
      3
 ```
+
+/*-----------待补充----------------*/
+
+## 16 使用列表
+
+### 16.1 List字面量
+
+```scala
+val fruit = List("apples", "oranges", "pears")
+val nums = List(1, 2, 3, 4)
+val diag3 = List(
+  List(1, 0, 0),
+  List(0, 1, 0),
+  List(0, 0, 1)
+)
+val empty = List()
+```
+
+列表跟数组很像，但有两个重要区别：
+
+- 列表是不可变的，列表的元素不能通过赋值改变；
+- 列表的结构是递归的，即链表，而数组是平的。
+
+### 16.2 List类型
+
+`同一列表的所有元素都必须是相同的元素`。元素类型为`T`的类表类型写作`List[T]`。
+
+Scala的列表是协变(covariant)的，意思是对每一组类型`S`和`T`，如果`S`是`T`的子类型，那么`List[S]`就是`List[T]`的子类型。例如，`List[String]`是`List[Object]`的子类型。
+
+注意，空列表的类型为List[Nothing]是所有List[T]的子类：
+
+```scala
+val xs: List[String] = List() //List()也是List[String]类型的
+```
+
+### 16.3 构建列表
+
+所有的列表都构建自两个基础构建单元：`Nil`和`::`。`Nil表示空列表`，`中缀操作符::`表示在列表前面追加元素。
+
+```scala
+val fruit = "apples" :: ("oranges" :: ("pears" :: Nil))
+val nums = 1 :: (2 :: (3 :: (4 :: Nil)))
+val diags = (1 :: (0 :: (0 :: Nil))) ::
+            (0 :: (1 :: (0 :: Nil))) ::
+            (0 :: (0 :: (1 :: Nil))) :: Nil
+val empty = Nil
+```
+
+### 16.4 列表的基本操作
+
+对列表的所有操作都可以用下面的这三项来表示：
+|||
+|--|--|
+|`head`|返回列表的第一个元素|
+|`tail`|返回列表中出第一个元素之外的所有元素|
+|`isEmpty`|返回列表是否为空列表|
+|||
+
+`head`和`tail`只对`非空列表`有定义。
+
+对列表进行插入排序：
+
+```scala
+def isort(xs: List[Int]): List[Int] = {
+  if (xs.isEmpty) Nil
+  else insert(xs.head, isort(xs.tail))
+}
+
+def insert(x: Int, xs: List[Int]): List[Int] = {
+  if (xs.isEmpty || x <= xs.head) x :: xs
+  else xs.head :: insert(x, xs, xs.tail)
+}
+```
+
+### 16.5 列表模式
+
+列表也可以使用模式匹配解开。列表模式可以逐一对应到列表表达式。
+
+```scala
+scala> val fruit = "apples" :: ("oranges" :: ("pears" :: Nil))
+fruit: List[String] = List(apples, oranges, pears)
+
+scala> val List(a, b, c) = fruit
+a: String = apples
+b: String = oranges
+c: String = pears
+```
+
+如果实现不知道列表中元素的个数，可以使用如下方法来匹配：
+
+```scala
+scala> val a :: b :: c :: Nil = fruit
+a: String = apples
+b: String = oranges
+c: String = pears
+```
+
+> `x :: xs` 表达式相当于`::(x, xs)`
+
+实际上有一个名为`::`的类，它的名字叫做`scala.::`，就是用来构建非空列表的。因此`::`在Scala中出现了两次，以此作为scala包中一个类的名字，一次是在List类的方法名。`::`方法的作用是产生一个`scala.::`类的实例。
+
+用模式匹配再次实现插入排序：
+
+```scala
+def isort(xs: List[Int]): List[Int] = xs match{
+  case List() => List()
+  case x :: xs1 => insert(x, isort(xs1))
+}
+
+def insert(x: Int, xs: List[Int]): List[Int] = xs match{
+  case List() => List()
+  case y :: ys => if (x <= y) x :: xs else y :: insert(x, ys)
+}
+```
+
+### 16.6 List类的初阶方法
+
+
+#### 16.6.1 分治原则
+
+#### 16.6.2 获取列表长度
+
+#### 16.6.3 访问列表的末端
+
+#### 16.6.4 反转列表
+
+#### 16.6.5 前缀和后缀
+
+#### 16.6.6 元素选择
+
+#### 16.6.7 扁平化列表的列表
+
+#### 16.6.8 zip方法
+
+#### 16.6.9 显示列表
+
+#### 16.6.10 转换列表
+
+#### 16.6.11 递归排序
+
+### 16.7 List类的高阶方法
+
+#### 16.7.1 对列表进行映射
+
+#### 16.7.2 过滤列表
+
+#### 16.7.3 前提条件检查
+
+#### 16.7.4 折叠列表
+
+#### 16.7.5 反转列表
+
+#### 16.7.6 排序
+
+### 16.8 List对象的方法
+
+#### 16.8.1 从元素创建列表
+
+#### 16.8.2 创建数值区间
+
+#### 16.8.3 创建相同元素的列表
+
+#### 16.8.4 表格化一个函数
+
+#### 16.8.5 拼接列表
+
+### 16.9 同时处理多个列表
+
+### 16.10 理解Scala的类型推断算法
