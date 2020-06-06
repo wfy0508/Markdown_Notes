@@ -4526,3 +4526,37 @@ simplifyAdd: (e: Expr)Expr
 case n: if n > 0 => ...
 case s: String if s(0) == 'a' => ...
 ```
+
+### 15.4 模式重叠
+
+```scala
+def simplifyAll(expr: Expr): Expr = expr match{
+  case UnOp("-", UnOp("-", e)) => simplifyAll(e)
+  case BinOp("+", e, Number(0)) => simplifyAll(e)
+  case BinOp("*", e, Number(1)) => simplifyAll(e)
+  case UnOp(op, e) => UnOp(op, simplifyAll(e))
+  case BinOp(op, l, r) => BinOp(op, simplifyAll(l), simplifyAll(r))
+  case _ =>expr
+}
+
+scala> val x = Number(-123)
+x: Number = Number(-123.0)
+
+scala> val y = Var("abc")
+y: Var = Var(abc)
+
+scala> simplifyAll(UnOp("-", UnOp("-", y)))  //匹配第一个case
+res11: Expr = Var(abc)
+
+scala> simplifyAll(BinOp("+", x, Number(1))) //没有匹配到，执行最后一个case
+res12: Expr = BinOp(+,Number(-123.0),Number(1.0))
+
+scala> simplifyAll(BinOp("*", x, Number(1)))
+res13: Expr = Number(-123.0)
+
+scala> simplifyAll(UnOp("+", x))
+res14: Expr = UnOp(+,Number(-123.0))
+
+scala> simplifyAll(BinOp("*", x, x))
+res16: Expr = BinOp(*,Number(-123.0),Number(-123.0))
+```
