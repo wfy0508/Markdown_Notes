@@ -4444,5 +4444,85 @@ Warning:(39, 11) non-variable type argument Int in type pattern scala.collection
 case m: Map[Int, Int] => m.size
 ```
 
-Scala使用泛型的擦除模型，就像Java一样。这意味着在运行时不会维护关于类型参数的信息。在运行时,没有办法确定给定的Map对象是否已经用两个Int参数创建。
+Scala使用泛型的擦除模型，就像Java一样。这意味着在运行时不会维护关于类型参数的信息。在运行时,没有办法确定给定的Map是用两个Int类型参数创建的，还是其他类型创建的。只是判断某个值是不确定类型参数的Map。
 
+```scala
+scala> isIntIntMap(Map(1 -> 1))
+res2: Boolean = true
+
+scala> isIntIntMap(Map("abc"-> "abc"))
+res3: Boolean = true
+```
+
+但是类型擦除规则唯一例外的是数组，数组的元素类型是跟数据一起保存的：
+
+```scala
+def isStringArray(x: Any) = x match{
+  case a: Array[String] => "yes"
+  case _ => "no"
+}
+
+scala> val as = Array("abc")
+as: Array[String] = Array(abc)
+
+scala> isStringArray(as)
+res4: String = yes
+
+scala> val ai = Array(1, 2, 3)
+ai: Array[Int] = Array(1, 2, 3)
+
+scala> isStringArray(ai)
+res5: String = no
+```
+
+#### 15.2.8 变量绑定
+
+变量名，一个@符号和模式本身，就得到一个变量绑定模式。意味着这个模式将跟平常一阳指型模式匹配，如果匹配成功，就将匹配的对象赋值给这个变量，就像简单的变量模式一样。
+
+```scala
+expr match{
+  case UnOp("abs", e @ UnOp("abs", _)) => e
+  case _ =>
+}
+```
+
+包含了一个以`e为变量`，`UnOp("abs", _)`为模式的变量绑定模式。如果匹配成功，那么匹配了`UnOp("abs", _)`的部分就被复制给变量`e`。这个case的结果就是e，这是因为e跟expr的值相同，但是少了一次求绝对值的操作。
+
+### 15.3 模式守卫
+
+加入我们要公式化一个简化规则：`(e * 2)`替代`(e + e)`，在表示Expr数的语言中：
+
+`BinOp("+", Var("x"), Var("x")) => BinOp("*", Var("x"), Number(2))`
+
+可能写如下规则：
+
+```scala
+def simplifyAdd(e: Expr) = e match{
+  case BinOp("+", x, x) => BinOp("*", x, Number(2))
+  case _ => e
+}
+
+<pastie>:17: error: x is already defined as value x
+  case BinOp("+", x, x) => BinOp("*", x, Number(2))
+                     ^
+```
+
+编译器会抛出一个错误，因为Scala要求模式都是线性的，`同一个模式变量在模式中只能出现一次`。不过可以用一个模式守卫来重新定义这个匹配逻辑：
+
+```scala
+def simplifyAdd(e: Expr) = e match{
+  case BinOp("+", x, y) if x == y => BinOp("*", x, Number(2))
+  case _ => e
+}
+
+simplifyAdd: (e: Expr)Expr
+```
+
+模式守卫以if开头，模式守卫可以使任意的布尔表达式，通常引用到模式中的变量。如果存在模式守卫，这个匹配仅在模式守卫求值得到true时才会成功。因此，上面提到的首个case只能匹配那些两个操作员相等的二元操作。
+
+其他模式守卫实例：
+
+```scala
+case n: if n > 0 => ...
+case s: String if s(0) == 'a' => ...
+```
