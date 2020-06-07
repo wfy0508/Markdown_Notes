@@ -1,6 +1,6 @@
 # Scala编程
 
-## 一种可伸缩语言
+## 1 一种可伸缩语言
 
 1 定义Map类型变量
 
@@ -4899,28 +4899,284 @@ def insert(x: Int, xs: List[Int]): List[Int] = xs match{
 
 ### 16.6 List类的初阶方法
 
+#### 16.6.1 拼接列表
 
-#### 16.6.1 分治原则
+跟`::`类似，拼接列表使用`:::`，不同于`::`，`:::`接收两个列表参数为操作元：
 
-#### 16.6.2 获取列表长度
+```scala
+scala> List(1, 2) ::: List(3, 4, 5)
+res0: List[Int] = List(1, 2, 3, 4, 5)
 
-#### 16.6.3 访问列表的末端
+scala> List() ::: List(1, 2, 3)
+res1: List[Int] = List(1, 2, 3)
 
-#### 16.6.4 反转列表
+scala> List(1, 2, 3) ::: List(4)
+res2: List[Int] = List(1, 2, 3, 4)
+```
 
-#### 16.6.5 前缀和后缀
+列表拼接也是右结合的，像这样一个表达式
 
-#### 16.6.6 元素选择
+```scala
+xs ::: ys ::: zs
+```
 
-#### 16.6.7 扁平化列表的列表
+被解读为：
 
-#### 16.6.8 zip方法
+```scala
+xs ::: (ys ::: zs)
+```
 
-#### 16.6.9 显示列表
+#### 16.6.2 分治原则
 
-#### 16.6.10 转换列表
+拼接(:::)是作为List类的一个方法实现的。也可以通过列表进行模式匹配来实现“`手工`”拼接。`手工拼接`展示了用列表实现算法的常用方式。先假定一个拼方法签名`append`，接收两个待拼接的列表的作为参数，两个列表的元素类型必须一致：
 
-#### 16.6.11 递归排序
+```scala
+def append[T](xs: List[T], ys: List[T]): List[T]
+```
+
+要设计这样一个`append`方法，需要回顾一下对于列表这样的递归数据结构的“`分而治之`”的程序设计原则。许多对列表的算法都首先会模式匹配将待输入的列表切分成更小的样例。这是设计原则中的“`分`”的部分。然后对每个样例构建对应的结果，如果结果是一个非空列表，那么这个列表的局部可以通过递归地调用同一个算法来构建，这个设计原则中的“`治`”的部分。
+
+要实现append方法的第一个问题是：`匹配哪一个列表`，由分而治之中“`治`”的部分可知，需要同时包含两个输入列表的所有元素。由于列表是从右开始构建的，所以ys可以不用动，而xs需要先解开然后追加到ys的前面。这样一来，xs就是模式匹配的来源。
+
+匹配列表最常见的模式是区分空列表和非空列表，以下是append方法的初步实现：
+
+```scala
+def append[T](xs: List[T], ys: List[T]): List[T] = xs match{
+  case List() => ???
+  case x :: xs1 => ???
+}
+```
+
+第一部分，当来源是空列表时：
+
+```scala
+case List() => ys
+```
+
+第二部分，当输入列表xs由某个头x和尾xs1组成时的可选分支时，这个case中的结果也是一个非空列表。我们知道第一个元素是x，而余下的元素可以通过将第二个列表ys拼接在第一个列表的剩余部分即xs1之后
+
+```scala
+def append[T](xs: List[T], ys: List[T]): List[T] = xs match{
+  case List() => ys
+  case x :: xs1 => x :: append(xs1, ys) //体现了治的原则，调用的都是同一个算法append
+}
+```
+
+#### 16.6.3 获取列表长度
+
+```scala
+scala> List(1, 2, 3).length
+res3: Int = 3
+```
+
+相比于数组，列表获取长度length操作相对更加耗时，找到一个列表的末端，需要遍历整个列表，因此耗时与列表的元素数量成正比，这就是`xs.isEmpty`这样的测试换成`xs.length == 0`并不是什么好主意，并没有什么区别，且第二种更加耗时。
+
+#### 16.6.4 访问列表的末端
+
+```scala
+scala> val abcde = List('a', 'b', 'c', 'd', 'e')
+abcde: List[Char] = List(a, b, c, d, e)
+
+scala> abcde.last //返回最后一个元素
+res4: Char = e
+
+scala> abcde.init //返回除最后一个元素之外的所有元素
+res5: List[Char] = List(a, b, c, d)
+```
+
+与head和tail类似，init和last的定义是针对非空列表的：
+
+```scala
+scala> List().last
+java.util.NoSuchElementException
+  at scala.collection.LinearSeqOptimized.last
+  ...
+
+scala> List().last
+java.util.NoSuchElementException
+  at scala.collection.LinearSeqOptimized.last
+  ...
+```
+
+#### 16.6.5 反转列表
+
+```scala
+scala> abcde.reverse
+res8: List[Char] = List(e, d, c, b, a)
+
+scala> abcde.reverse.reverse
+res9: List[Char] = List(a, b, c, d, e)
+```
+
+调用reverse并不会对原有列表进行修改，而是创建新的列表。
+
+```scala
+scala> abcde.reverse.init == abcde.tail.reverse
+res10: Boolean = true
+
+scala> abcde.reverse.tail == abcde.init.reverse
+res11: Boolean = true
+
+scala> abcde.reverse.head == abcde.last
+res12: Boolean = true
+
+scala> abcde.reverse.last == abcde.head
+res13: Boolean = true
+```
+
+#### 16.6.6 前缀和后缀
+
+drop和take是对tail和init的一般化，它们返回的是列表任意长度的前缀和后缀，表达式`xs take n`，表示返回xs的前n个元素，如果n大于列表的长度，则返回整个列表的元素，表达式`xs drop n`表示返回xs除了前n个元素之外的所有元素，如果n大于列表长度，则返回空列表：
+
+```scala
+scala> abcde take 2
+res14: List[Char] = List(a, b)
+
+scala> abcde drop 3
+res15: List[Char] = List(d, e)
+```
+
+splitAt操作 将列表从执行位置切开，返回这两个列表组成的对偶：
+
+```scala
+xs splitAt n 等于 (xs take n, xs drop n)
+
+scala> abcde splitAt 3
+res17: (List[Char], List[Char]) = (List(a, b, c),List(d, e))
+```
+
+#### 16.6.7 元素选择
+
+apply支持从任意位置选取元素，相比于数组，这个操作在列表的并不是很常用：
+
+```scala
+scala> abcde apply 2
+res18: Char = c
+
+//apply是通过drop和head定义的：
+xs apply n 等于(xs drop n).head
+
+scala> abcde(2) //在scala中很少见，因为比较耗时
+res19: Char = c
+
+scala> abcde.indices
+res20: scala.collection.immutable.Range = Range 0 until 5
+```
+
+#### 16.6.8 扁平化列表的列表
+
+```scala
+scala> List(List(1, 2), List(3), List(), List(4, 5)).flatten
+res21: List[Int] = List(1, 2, 3, 4, 5)
+
+scala> val fruit = List("apples", "oranges", "pears")
+fruit: List[String] = List(apples, oranges, pears)
+
+scala> fruit.map(_.toCharArray).flatten
+res22: List[Char] = List(a, p, p, l, e, s, o, r, a, n, g, e, s, p, e, a, r, s)
+```
+
+flatten方法只能作用于那些所有元素都是列表的列表，针对单个列表使用，编译器会抛出一个错误：
+
+```scala
+scala> List(1, 2, 3).flatten
+<console>:12: error: No implicit view available from Int => scala.collection.GenTraversableOnce[B].
+       List(1, 2, 3).flatten
+                     ^
+```
+
+#### 16.6.9 zip方法
+
+zip方法接收两个列表，返回一个对偶组成的列表：
+
+```scala
+scala> abcde.indices zip abcde
+res24: scala.collection.immutable.IndexedSeq[(Int, Char)] = Vector((0,a), (1,b), (2,c), (3,d), (4,e))
+
+scala> abcde zip abcde
+res25: List[(Char, Char)] = List((a,a), (b,b), (c,c), (d,d), (e,e))
+```
+
+如果列表的元素个数不同，则会抛弃多余的元素：
+
+```scala
+scala> abcde zip List(1, 2, 3) //列表abcde中的d，e会被丢弃
+res26: List[(Char, Int)] = List((a,1), (b,2), (c,3))
+```
+
+一个有用的特例是将列表的元素和对应的下标zip起来：
+
+```scala
+scala> abcde.zipWithIndex
+res27: List[(Char, Int)] = List((a,0), (b,1), (c,2), (d,3), (e,4)) 
+```
+
+也可以通过unzip还原列表：
+
+```scala
+scala> abcde.zipWithIndex.unzip
+res28: (List[Char], List[Int]) = (List(a, b, c, d, e),List(0, 1, 2, 3, 4))
+```
+
+#### 16.6.10 显示列表
+
+toString操作返回列表的标准字符串表现形式：
+
+```scala
+scala> abcde.toString
+res29: String = List(a, b, c, d, e) //转为换String类型
+
+scala> abcde
+res30: List[Char] = List(a, b, c, d, e)
+```
+
+如果需要不同的表现形式，可以使用mkString方法：
+
+```scala
+xs mkString (pre, sep, post)
+```
+
+涉及4个操作元：要显示的列表`xs`、列表最前面的前缀字符串`pre`、在元素间显式的分隔符字符串`sep`和出现在最后的后缀字符串`post`。这个操作的结果是如下字符串：
+
+`pre + xs(0) + sep + ... + sep + xs(xs.length - 1) + post`
+
+mkString有两个重载的变种，第一个变种是只接受一个分割字符串：
+
+`xs mkString sep` 等于 `xs mkString ("", sep, "")`
+
+第二种是什么都不填：
+
+`xs mkString` 等于 `xs mkString ""`
+
+例子如下：
+
+```scala
+scala> abcde mkString("[", ",", "]")
+res31: String = [a,b,c,d,e]
+
+scala> abcde mkString ""
+res33: String = abcde
+
+scala> abcde.mkString
+res34: String = abcde
+
+scala> abcde mkString ("List(",", ",")")
+res35: String = List(a, b, c, d, e)
+```
+
+mkString还有别的变种，如addString，这个方法侯建出来的字符串追加到一个StringBuilder对象，而不是作为结果返回：
+
+```scala
+scala> val buf = new StringBuilder
+buf: StringBuilder =
+
+scala> abcde addString (buf, "(", ";", ")")
+res36: StringBuilder = (a;b;c;d;e)
+```
+
+#### 16.6.11 转换列表
+
+#### 16.6.12 递归排序
 
 ### 16.7 List类的高阶方法
 
