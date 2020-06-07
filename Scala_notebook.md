@@ -5176,34 +5176,375 @@ res36: StringBuilder = (a;b;c;d;e)
 
 #### 16.6.11 转换列表
 
-#### 16.6.12 递归排序
+数组与列表之间的转化可以使用List类的`toArray`和Array类的`toList`方法:
+
+```scala
+scala> val arr = abcde.toArray
+arr: Array[Char] = Array(a, b, c, d, e)
+
+scala> arr.toList
+res37: List[Char] = List(a, b, c, d, e)
+```
+
+还有一个copyToArray方法可以将列表中的元素依次赋值到目标数组的指定位置：
+
+`xs copyToArray (arr, start)`
+
+要保证数组足够大，能容纳整个列表：
+
+```scala
+scala> val arr2 = new Array[Int](10)
+arr2: Array[Int] = Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+scala> List(1, 2, 3) copyToArray (arr2, 3)
+
+scala> arr2
+res39: Array[Int] = Array(0, 0, 0, 1, 2, 3, 0, 0, 0, 0)
+```
+
+如果要通过迭代器去访问列表元素，可以iterator方法：
+
+```scala
+scala> val it = abcde.iterator
+it: Iterator[Char] = <iterator>
+
+scala> it.next
+res40: Char = a
+
+scala> it.next
+res41: Char = b
+```
 
 ### 16.7 List类的高阶方法
 
 #### 16.7.1 对列表进行映射
 
+map操作：
+
+```scala
+scala> List(1, 2, 3) map (_ +1)
+res42: List[Int] = List(2, 3, 4)
+
+scala> val words = List("the", "quick", "brown", "fox")
+words: List[String] = List(the, quick, brown, fox)
+
+scala> words map (_.length)
+res43: List[Int] = List(3, 5, 5, 3)
+
+scala> words map (_.toList.reverse.mkString)
+res44: List[String] = List(eht, kciuq, nworb, xof)
+```
+
+flatMap和map操作类似，不过它要求右侧的操作元是一个返回元素列表的函数。它将这个函数应用到列表中每个元素上，然后将所有结果拼接起来返回：
+
+```scala
+scala> words map (_.toList)
+res45: List[List[Char]] = List(List(t, h, e), List(q, u, i, c, k), List(b, r, o, w, n), List(f, o, x))
+
+scala> words flatMap (_.toList)
+res46: List[Char] = List(t, h, e, q, u, i, c, k, b, r, o, w, n, f, o, x)
+```
+
+map返回的是列表的列表，flatMap返回的是所有元素拼接起来的列表。
+
+下面表达式构建一个满足`1 <= j < i < 5`的所有对偶`(i, j)`：
+
+```scala
+scala> List.range(1, 5)
+res47: List[Int] = List(1, 2, 3, 4)
+
+scala> List.range(1, 5) flatMap(i => List.range(1, i) map (j => (i, j)))
+res49: List[(Int, Int)] = List((2,1), (3,1), (3,2), (4,1), (4,2), (4,3))
+```
+
+同样也可以使用for表达式来实现：
+
+```scala
+scala> for (i <- List.range(1, 5); j <- List.range(1, i)) yield (i, j)
+res51: List[(Int, Int)] = List((2,1), (3,1), (3,2), (4,1), (4,2), (4,3))
+```
+
+foreach操作不同于map和flatMap，foreach要求有操作元是一个过程（结果类型为Unit）。只是简单的将过程应用到列表中的每个元素，整个操作本身结果类型也为Unit，并没有列表类型的结果被组装出来。
+
+```scala
+scala> var sum = 0
+sum: Int = 0
+
+scala> List(1, 2, 3, 4, 5).for
+forall   foreach   formatted
+
+scala> List(1, 2, 3, 4, 5).foreach(sum += _)
+
+scala> sum
+res53: Int = 15
+```
+
 #### 16.7.2 过滤列表
+
+`"xs filter p"`：操作元分别是类型为`List[T]`的`xs`和类型为`T => Boolean`的前提条件函数`p`。这个操作将交出xs中所有p(x)为true的元素x:
+
+```scala
+scala> List(1, 2, 3, 4, 5) filter (_ % 2 == 0)
+res54: List[Int] = List(2, 4)
+
+scala> words filter (_.length == 3)
+res55: List[String] = List(the, fox)
+```
+
+`partition`方法与filter很像，不过`返回的是一对列表`，其中一个所有前提条件为true的元素，另一个为条件为false的元素：
+
+`xs partition p` 等于 `(xs filter p, xs filter (!p(_)))`
+
+```scala
+scala> List(1, 2, 3, 4, 5) partition (_ % 2 == 0)
+res56: (List[Int], List[Int]) = (List(2, 4),List(1, 3, 5))
+```
+
+find方法返回查找到符合条件的第一个元素:
+
+```scala
+scala> List(1,2,3,4,5) find (_ % 2 == 0)
+res57: Option[Int] = Some(2)
+```
+
+`takeWhile`和`dropWhile`操作符也将一个前提条件为右操作元。`xs takeWhile p`操作将返回列表xs中`连续满足p的最长前缀`，同理是`dropWhile`是`去除`。
+
+```scala
+scala> List(1,2,3,-4,5) takeWhile (_ > 0)
+res58: List[Int] = List(1, 2, 3)
+
+scala> List(1,2,3,-4,5) dropWhile (_ > 0)
+res59: List[Int] = List(-4, 5)
+
+scala> words dropWhile (_ startsWith "t")
+res60: List[String] = List(quick, brown, fox)
+```
+
+`span`将`takeWhile`和`dropWhile`两个操作合二为一，就像`splitAt`将`take`和`drop`操作合二为一一样，会返回一堆列表：
+
+`xs span p`  等于  `(xs takeWhile p, xs drop While p)`
+
+```scala
+scala> List(1,2,3,-4,5) span (_ > 0)
+res61: (List[Int], List[Int]) = (List(1, 2, 3),List(-4, 5))
+```
 
 #### 16.7.3 前提条件检查
 
+`xs forall p`：接收`一个列表xs`和`一个前提条件p`作为入参。如果列表中所有的元素都满足条件p就返回true。
+
+`xs exists p`：只要有一个元素满足条件p就返回true。
+
+```scala
+scala> List(1,2,3,-4,5) forall (_ > 0)
+res62: Boolean = false
+
+scala> List(1,2,3,-4,5) exists (_ > 0)
+res63: Boolean = true
+```
+
 #### 16.7.4 折叠列表
+
+对列表的另一种常见操作是用某种操作符合并元素：
+
+`sum(List(1, 2, 3))`  等于  `0 + a + b + c`
+
+这是折叠操作的一个特例：
+
+```scala
+scala> def sum(xs: List[Int]): Int = (0 /: xs)(_ + _)
+sum: (xs: List[Int])Int
+```
+
+同理：
+
+`product(List(a, b, c))`  等于  `1 * a * b * c`
+
+```scala
+scala> def product(xs: List[Int]): Int = (0 /: xs)(_ * _)
+product: (xs: List[Int])Int
+```
+
+`左折叠`操作：`(z /: xs)(op)`，设计三个对象，起始值`z`、列表`xs`和二元操作`op`。折叠的结果以z为前缀，对列表元素依次连续应用op。
+
+`(z /: List(a, b, c))(op)`  等于  `op(op(op(z, a), b), c)`
+
+```scala
+scala> ("" /: words)(_ + " " + _)
+res65: String = " the quick brown fox" //这里开始多了一个空格
+```
+
+要去除这个空格，像下面改写：
+
+```scala
+scala> (words.head /: words.tail) (_ + " " + _)
+res66: String = the quick brown fox
+```
+
+`/:`操作符产生一个往左靠的数，同理`:/`(右折叠)操作符产生一个向右靠的操作树。
+
+`(List(a, b, c) :/ z)(op)`  等于  `op(a, op(b, op(c, z)))`
 
 #### 16.7.5 反转列表
 
-#### 16.7.6 排序
+reverse用于反转列表的开销是列表长度的平方级，现在来看一个reverse的不同实现，运行开销是线性的，原理是基于下面的机制来做左折叠：
+
+```scala
+def reverseLeft[T](xs: List[T]) = (startvalue /: xs)(operation)
+```
+
+剩下的需要补全的就是startvalue和operation部分。事实上，可以用更见的例子来推导，为了推导出startvalue正确的取值，可以用最简单的列表List()开始：
+
+`List()` 等同于 `reverseLeft(List())` 等同于 `(起始值 /: List())(op)`
+
+因此startvalue必须是List()，要推导出第二个操作元，可以拿仅次于List()的最小列表作为样例，可以做一下演算：
+
+`List()` 等同于 `reverseLeft(List())` 等同于 `(List() /: List())(操作)` 等同于 `op(List(), x)`。
+
+因此，`operation(List(), x)`等于`List()`，而`List(x)`也可以写作`x :: List()`。这样我们就发现可以基于`::`操作符把两个操作元翻转一下来得到`operation`，于是得到reverseLeft如下实现：
+
+```scala
+def reverseLeft[T](xs: List[T]) = {
+  (List[T]() /: xs){
+    (ys, y) => y :: ys
+  }
+}
+```
+
+同样，为了让类型推断程序正常工作，这里的类型注解`List[T]()`是必须的。如果我们分析reverseLeft的实现复杂度，会发现它执行这个常量时间操作（即，“snoc”）n次，因此reverseLeft的时间复杂度是线性的。
+
+#### 16.7.6 列表排序
+
+`xs sortWith before`这个操作对列表xs中的元素进行排序，其中xs是列表，而before是一个用来比较两个元素的函数：
+
+```scala
+scala> List(1, -3, 4, 2, 6) sortWith (_ < _)
+res67: List[Int] = List(-3, 1, 2, 4, 6)
+
+scala> words sortWith (_.length > _.length)
+res68: List[String] = List(quick, brown, the, fox)
+```
 
 ### 16.8 List对象的方法
 
+以上定义的所有操作都是List类的方法，因此我们其实是在每个具体的列表对象上调用它们。还有一些定义在全局可访问对象`scala.List`上的，这是`List类的伴生对象`。某些操作是用于创建列表的工厂方法，另一些是对特定形状的列表进行操作。
+
 #### 16.8.1 从元素创建列表
+
+```scala
+scala> List.apply(1, 2, 3)
+res69: List[Int] = List(1, 2, 3)
+```
 
 #### 16.8.2 创建数值区间
 
+```scala
+scala> List.range(1, 5)
+res70: List[Int] = List(1, 2, 3, 4)
+
+scala> List.range(1, 9, 2)  //(start, end, step)
+res71: List[Int] = List(1, 3, 5, 7)
+
+scala> List.range(9, 1, -1) //(start, end, step)
+res72: List[Int] = List(9, 8, 7, 6, 5, 4, 3, 2)
+```
+
 #### 16.8.3 创建相同元素的列表
+
+```scala
+scala> List.fill(5)('a')
+res73: List[Char] = List(a, a, a, a, a)
+
+scala> List.fill(3)("hello")
+res74: List[String] = List(hello, hello, hello)
+```
+
+如果给fill的参数多于1个，那么它会自动创建多维列表。也就是说，它将创建出列表的列表，列表的列表的列表。多出来的这些参数要放在第一个参数列表中。
+
+```scala
+scala> List.fill(2, 3)('b')
+res75: List[List[Char]] = List(List(b, b, b), List(b, b, b))
+```
 
 #### 16.8.4 表格化一个函数
 
+`tabulate`方法创建的是一个根据给定的函数计算的元素的列表，其入参和`List.fill`一样：第一个参数列表给出要创建列表的维度，而第二个参数列表描述列表的元素，唯一的区别是，元素值不再是固定的，而是从函数计算得来：
+
+```scala
+scala> val squares = List.tabulate(5)(n => n * n)
+squares: List[Int] = List(0, 1, 4, 9, 16)
+
+scala> val multiplication = List.tabulate(5, 5)(_ * _)
+multiplication: List[List[Int]] =
+  List(List(0, 0, 0, 0, 0),
+       List(0, 1, 2, 3, 4),
+       List(0, 2, 4, 6, 8),
+       List(0, 3, 6, 9, 12),
+       List(0, 4, 8, 12, 16))
+```
+
 #### 16.8.5 拼接列表
+
+```scala
+scala> List.concat(List('a', 'b'), List('c', 'd'))
+res76: List[Char] = List(a, b, c, d)
+
+scala> List.concat(List(), List('a'), List('b'))
+res77: List[Char] = List(a, b)
+
+scala> List.concat()
+res78: List[Nothing] = List()
+```
 
 ### 16.9 同时处理多个列表
 
-### 16.10 理解Scala的类型推断算法
+zipped可以同时处理多个列表，其中一个通用的操作是map，对两个zip在一起的列表调用map的效果是对元素一组一组地做映射，而不是单个元素。
+
+```scala
+scala> (List(10, 20), List(3, 4, 5)).zipped.map(_ * _)
+res79: List[Int] = List(30, 80)
+```
+
+同理，exists和forall也有zip起来的版本，但操作的是多个列表：
+
+```scala
+scala> (List("abc", "de"), List(3, 2)).zipped.forall(_.length == _)
+res80: Boolean = true
+
+scala> (List("abc", "de"), List(3, 2)).zipped.exists(_.length != _)
+res81: Boolean = false
+```
+
+## 17 使用其他集合类
+
+### 17.1 序列
+
+#### 17.1.1 列表
+
+#### 17.1.2 数组 
+
+#### 17.1.3 列表缓冲
+
+#### 17.1.4 数组缓冲
+
+#### 17.1.2 字符串（通过StringOps）
+
+### 17.2 集和映射
+
+#### 17.2.1 使用集
+
+#### 17.2.2 使用映射
+
+#### 17.2.3 默认的集和映射
+
+#### 17.2.4 排序号的集和映射
+
+### 17.3 在可变和不可变集合类之间选择
+
+### 17.4 初始化集合
+
+#### 17.4.1 转换成数组或列表
+
+#### 17.4.2 在可变与不可变集及映射间转换
+
+### 17.5 元组
