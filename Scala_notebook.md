@@ -5519,15 +5519,99 @@ res81: Boolean = false
 
 ### 17.1 序列
 
+序列类型允许您处理按顺序排列的数据组。因为元素是有序的，你可以按下标访问第1个元素，第1个元素，103号元素，以此类推。
+
 #### 17.1.1 列表
 
-#### 17.1.2 数组 
+由前几章介绍可知，List是不可变链表，支持在头部快速添加和删除元素，但是并不支持按照下标快速访问其中的元素，因为这需要随下标线性的遍历列表。
+
+这些特征的组合听起来可能有点奇怪，但它们正好适合许多算法。初始元素的快速添加和删除意味着模式匹配工作良好。
+
+#### 17.1.2 数组
+
+数组允许保存一个元素序列，并使用从零开始的索引有效地访问任意位置的元素，以获取或更新元素。
+
+```scala
+scala> val fiveInts = new Array[Int](5)
+fiveInts: Array[Int] = Array(0, 0, 0, 0, 0)
+
+scala> val fiveToOne = new Array[Int](5)
+fiveToOne: Array[Int] = Array(0, 0, 0, 0, 0)
+
+scala> fiveToOne(4) = 1
+
+scala> fiveToOne
+res3: Array[Int] = Array(0, 0, 0, 0, 1)
+```
 
 #### 17.1.3 列表缓冲
 
+如果要在列表的尾部添加一个元素，首先需要将列表使用reverse方法，将列表反转过来，在头部添加元素后，再将列表反转。
+
+另一种不使用reverse的方法是调用`ListBuffer`方法。ListBuffer是一个可变对象，位于`scala.collection.mutable`包中，在对列表添加元素时更加高效，提供常量时间的尾部添加(`append`)和头部添加(`prepend`)元素操作。`append`元素使用`+=`操作符，`prepend`使用`+=:`操作，操作完成后调用`toList`方法，将`ListBuffer`转换为`List`。
+
+```scala
+scala> import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ListBuffer
+
+scala> val buf = new ListBuffer[Int]
+buf: scala.collection.mutable.ListBuffer[Int] = ListBuffer()
+
+scala> buf += 1
+res4: buf.type = ListBuffer(1)
+
+scala> buf += 2
+res5: buf.type = ListBuffer(1, 2)
+
+scala> 3 +=: buf
+res7: buf.type = ListBuffer(3, 1, 2)
+```
+
+使用ListBuffer的另一个原因是，防止潜在的栈溢出风险，后面将在22.2章详细介绍。
+
 #### 17.1.4 数组缓冲
 
+`ArrayBuffer`类似于数组，此外还可以在序列的开头和结尾添加和删除元素。所有数组操作都是可用的，不过由于实现中有一层包装，它们的速度会慢一些。新的添加和删除操作的平均时间是常数，但偶尔需要线性时间，因为实现需要分配一个新的数组来保存缓冲区的内容。`ArrayBuffer`位于`scala.collection.mutable包`中。
+
+```scala
+scala> import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ArrayBuffer
+
+scala> val buf = new ArrayBuffer[Int]() //可以不指定长度
+buf: scala.collection.mutable.ArrayBuffer[Int] = ArrayBuffer()
+
+scala> buf += 12
+res8: buf.type = ArrayBuffer(12)
+
+scala> buf += 15
+res9: buf.type = ArrayBuffer(12, 15)
+
+scala> buf
+res10: scala.collection.mutable.ArrayBuffer[Int] = ArrayBuffer(12, 15)
+
+scala> buf.length
+res11: Int = 2
+
+scala> buf(0)
+res12: Int = 12
+```
+
 #### 17.1.2 字符串（通过StringOps）
+
+另一个需要注意的序列是`StringOps`，它实现了许多序列方法。因为`Predef`具有从`字符串到字符串的隐式转换`，所以可以将任何字符串视为序列。
+
+```scala
+scala> def hasUpperCase(s: String) = s.exists(_.isUpper)
+hasUpperCase: (s: String)Boolean
+
+scala> hasUpperCase("Scala.Programming")
+res14: Boolean = true
+
+scala> hasUpperCase("scala.programming")
+res15: Boolean = false
+```
+
+String类本身没有exists方法，编译器会将String隐式转换为StringOps，StringOps有exists方法，exists会将string视为字符序列( sequence of characters)。
 
 ### 17.2 集和映射
 
