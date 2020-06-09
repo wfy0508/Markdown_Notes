@@ -5615,7 +5615,61 @@ String类本身没有exists方法，编译器会将String隐式转换为StringOp
 
 ### 17.2 集和映射
 
+前面已经介绍了Set和Map的用法，默认情况下，使用的都是不可变对象，如果想使用可变对象，需要显式的从scala.collection.mutable包中导入。另外这些对象都是Predef中定义，会自动导入到每一个Scala源文件中，下面是Predef的部分定义：
+
+```scala
+object Predef {
+  type Map[A, +B] = collection.immutable.Map[A, B] //type用于定义等号左边是等号右边的别名
+  type Set[A] = collection.immutable.Set(A)
+  val Map = collection.immutable.Map
+  val Set = collection.immutable.Set
+  //...
+}
+```
+
 #### 17.2.1 使用集
+
+集合的关键特征是，它们将确保在任何时候最多只包含一个相同的元素。
+
+```scala
+scala> val text = "See Spot run. Run, Spot. Run!"
+text: String = See Spot run. Run, Spot. Run!
+
+scala> val wordsArray = text.split("[ !,.]+")
+wordsArray: Array[String] = Array(See, Spot, run, Run, Spot, Run)
+
+scala> import scala.collection.mutable.Set
+import scala.collection.mutable.Set
+
+scala> val words = scala.collection.mutable.Set.empty[String]
+words: scala.collection.mutable.Set[String] = Set()
+
+scala> for (word <- wordsArray) words += word.toLowerCase
+
+scala> words
+res5: scala.collection.mutable.Set[String] = Set(see, run, spot)
+```
+
+Set常规操作：
+
+|操作|含义|
+|--|--|
+|val nums = Set(1, 2, 3)|创建一个不可变集合，nums.toString返回Set(1, 2, 3)|
+|nums + 5|添加元素5，返回Set(1, 2, 3, 5)|
+|nums - 3|移除元素3，返回Set(1, 2)|
+|nums ++ List(5, 6)|添加多个元素，返回Set(1, 2, 3, 5, 6)|
+|nums -- List(1, 2)|移除多个元素，返回Set(3)|
+|nums & Set(1, 3, 5, 7)|集合交集，返回Set(1, 3)|
+|nums.size|返回集的大小，返回3|
+|nums.contains(3)|是否包含3，返回true|
+|import scala.collection.mutable|导入可变集|
+|val words = mutable.Set.empty[String]|声明一个可变的空集合|
+|words += "the"|添加元素the，返回Set(the)|
+|words -= "the"|移除元素the，返回Set()|
+|words ++= List("do", "re", "mi")|添加多个元素，返回Set(do, re, mi)|
+|words --= List("do", "re")|移除do, re，返回Set(mi)|
+|words.clear|移除所有元素，返回Set()|
+|||
 
 #### 17.2.2 使用映射
 
