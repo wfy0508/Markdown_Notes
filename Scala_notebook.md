@@ -4928,7 +4928,7 @@ xs ::: (ys ::: zs)
 
 #### 16.6.2 分治原则
 
-拼接(:::)是作为List类的一个方法实现的。也可以通过列表进行模式匹配来实现“`手工`”拼接。`手工拼接`展示了用列表实现算法的常用方式。先假定一个拼方法签名`append`，接收两个待拼接的列表的作为参数，两个列表的元素类型必须一致：
+拼接(`:::`)是作为List类的一个方法实现的。也可以通过列表进行模式匹配来实现“`手工`”拼接。`手工拼接`展示了用列表实现算法的常用方式。先假定一个拼方法签名`append`，接收两个待拼接的列表的作为参数，两个列表的元素类型必须一致：
 
 ```scala
 def append[T](xs: List[T], ys: List[T]): List[T]
@@ -4953,7 +4953,7 @@ def append[T](xs: List[T], ys: List[T]): List[T] = xs match{
 case List() => ys
 ```
 
-第二部分，当输入列表xs由某个头x和尾xs1组成时的可选分支时，这个case中的结果也是一个非空列表。我们知道第一个元素是x，而余下的元素可以通过将第二个列表ys拼接在第一个列表的剩余部分即xs1之后
+第二部分，当输入列表xs由某个头`x`和尾`xs1`组成时的可选分支时，这个`case`中的结果也是一个非空列表。我们知道第一个元素是`x`，而余下的元素可以通过将第二个列表`ys`拼接在第一个列表的剩余部分即`xs1`之后
 
 ```scala
 def append[T](xs: List[T], ys: List[T]): List[T] = xs match{
@@ -5669,9 +5669,42 @@ Set常规操作：
 |words ++= List("do", "re", "mi")|添加多个元素，返回Set(do, re, mi)|
 |words --= List("do", "re")|移除do, re，返回Set(mi)|
 |words.clear|移除所有元素，返回Set()|
-|||
 
 #### 17.2.2 使用映射
+
+map使用起来类似于数组，只不过map的下标不是从0开始，可以使用任何类型的键：
+
+```scala
+scala> import scala.collection.mutable.Map
+import scala.collection.mutable.Map
+
+scala> val map = scala.collection.mutable.Map.empty[String, Int]
+map: scala.collection.mutable.Map[String,Int] = Map()
+
+scala> map("hello") = 1
+
+scala> map("world") = 2
+
+scala> map
+res2: scala.collection.mutable.Map[String,Int] = Map(world -> 2, hello -> 1)
+
+scala> map("hello")
+res3: Int = 1
+```
+
+将所有这些放在一起，这里有一个方法可以计算每个单词在字符串中出现的次数:
+
+```scala
+def countWords(text: String){
+  val counts = scala.collection.mutable.Map.empty[String, Int]
+  for (rawWord <- text.split("[ !,.]+")){
+    val word = rawWord.toLowerCase
+    val oldCount = if (counts.contains(word)) counts(word) else 0
+    counts += (word -> (oldCount + 1))
+  }
+  counts
+}
+```
 
 #### 17.2.3 默认的集和映射
 
@@ -5685,4 +5718,4 @@ Set常规操作：
 
 #### 17.4.2 在可变与不可变集及映射间转换
 
-### 17.5 元组
+### 17.5 元组	
