@@ -3849,7 +3849,7 @@ def showFruit(fruit: Fruit) = {
 }
 ```
 
-`showFruit`中`fruit`是`Fruit`类型，直接导�������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
+`showFruit`中`fruit`是`Fruit`类型，直接���������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
 
 Scala灵活导入包的方式：
 
@@ -5695,7 +5695,7 @@ res3: Int = 1
 将所有这些放在一起，这里有一个方法可以计算每个单词在字符串中出现的次数:
 
 ```scala
-def countWords(text: String){
+def countWords(text: String) = {
   val counts = scala.collection.mutable.Map.empty[String, Int]
   for (rawWord <- text.split("[ !,.]+")){
     val word = rawWord.toLowerCase
