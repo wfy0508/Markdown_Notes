@@ -5704,18 +5704,251 @@ def countWords(text: String) = {
   }
   counts
 }
+
+scala> countWords("See Spot run! Run, Spot. Run!")
+res0: scala.collection.mutable.Map[String,Int] = Map(spot -> 2, see -> 1, run -> 3)
 ```
+
+Map的常用方法：
+
+|操作|含义|
+|--|--|
+|val nums = Map("i" -> 1, "ii" -> 2)|创建一个immutable Map|
+|nums +("vi" -> 6)|添加一个条目|
+|nums - "ii"|移除一个条目|
+|nums ++ List("iii" -> 3, "v" -> 5)|添加多个条目|
+|nums -- List("i", "ii")|移除两个条目|
+|nums.size|返回nums的大小|
+|nums.contains("ii")|是否包含指定键|
+|nums("ii")|返回键对应的值|
+|nums.keys|返回所有的键|
+|nums.keySet|返回所有键组成的集合|
+|nums.values|返回所有的值|
+|nums.isEmpty|判断nums是否为空|
+|import scala.collection.mutable|导入可变集合|
+|val words = mutable.Map.empty[String, Int]|建立一个空Map|
+|words += ("one" -> 1)|添加条目|
+|words -= "one"|移除条目|
+|words ++= List("one" -> 1,"two" -> 2, "three" -> 3)|添加多个条目|
+|words --= List("one", "two")|移除多个条目|
 
 #### 17.2.3 默认的集和映射
 
-#### 17.2.4 排序号的集和映射
+对于大多数情况，Set()、scala.collections.mutable.map()等工厂方法提供的可变和不可变集和映射的实现可能就足够了。这些工厂提供的实现使用快速查找算法，通常涉及到散列表，因此它们可以快速确定对象是否在集合中。
+
+例如，scala.collections.mutable.set()工厂方法，使用的是内部hash表，返回一个scala.collection.mutable.HashSet，同样地，scala.collections.mutable.collection.mutable.Map()工厂将返回一个scala.collection.mutable.HashMap。
+
+不可变Set和Map就要复杂一些，对于不可变Set：
+
+|||
+|--|--|
+|元素个数|实现方法|
+|0|scala.collection.immutable.EmptySet|
+|1|scala.collection.immutable.Set1|
+|2|scala.collection.immutable.Set2|
+|3|scala.collection.immutable.Set3|
+|4|scala.collection.immutable.Set4|
+|5 或者更多|scala.collection.immutable.HashSet|
+
+对于不可变Map：
+
+|||
+|--|--|
+|元素个数|实现方法|
+|0|scala.collection.immutable.EmptyMap|
+|1|scala.collection.immutable.Map1|
+|2|scala.collection.immutable.Map2|
+|3|scala.collection.immutable.Map3|
+|4|scala.collection.immutable.Map4|
+|5 或者更多|scala.collection.immutable.HashMap|
+
+#### 17.2.4 有序集和映射
+
+有时，您可能需要一个集合或映射，其迭代器以特定顺序返回元素。为此，Scala集合库提供了SortedSet和SortedMap两种特质。
+
+这些特征是由TreeSet和TreeMap类实现，它们使用红黑树来保持元素(在TreeSet的情况下)或键(在TreeMap的情况下)的顺序。顺序由Ordered特质决定，集合的元素类型或映射的键类型必须混合或隐式转换为该特质。这些类只有不可变变量。
+
+```scala
+scala> import scala.collection.immutable.TreeSet
+import scala.collection.immutable.TreeSet
+
+scala> val ts = TreeSet(9, 3, 1, 8, 0, 2, 7, 4, 6, 5)
+ts: scala.collection.immutable.TreeSet[Int] = TreeSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala> val cs = TreeSet('f', 'u', 'n')
+cs: scala.collection.immutable.TreeSet[Char] = TreeSet(f, n, u)
+
+scala> import scala.collection.immutable.TreeSet
+import scala.collection.immutable.TreeSet
+
+scala> var tm = TreeSet(3 -> 'x', 1 -> 'x', 4 -> 'x')
+tm: scala.collection.immutable.TreeSet[(Int, Char)] = TreeSet((1,x), (3,x), (4,x))
+
+scala> tm += (2 -> 'x')
+
+scala> tm
+res12: scala.collection.immutable.TreeSet[(Int, Char)] = TreeSet((1,x), (2,x), (3,x), (4,x))
+```
 
 ### 17.3 在可变和不可变集合类之间选择
 
+编程中，当抉择不定的时候，优先选择使用不可变集合类，因为这样更容易推断。特别是，如果您发现自己担心在适当的位置创建可变集合的副本，或者经常考虑谁“拥有”或“包含”可变集合，那么请考虑将某些集合切换为其不可变对象。
+
+除了可能更容易推理之外，如果集合中存储的元素数量很少，那么不可变集合通常可以比可变集合存储得更紧凑。例如，一个空的、默认表示为HashMap的可变映射大约占用80个字节，每增加一个条目，就增加16个字节。一个空的不可变Map，在所有引用之间共享的单一对象，因此对它的引用实际上只需要一个指针字段。
+
+此外，Scala集合库目前在单个对象中存储最多4个条目的不可变映射和集合，这通常占用16到40个字节，具体取决于集合中存储的条目数量。所以对于小型Map和Set，不可变版本比可变版本更紧凑。考虑到许多集合都很小，将它们切换为不可变可以带来重要的空间节省和性能优势。
+
+为了更容易从不可变集合切换到可变集合，反之亦然，Scala提供了一些语法糖。尽管不可变Set和Map不支持真正的`+=`方法，但Scala提供了一种有用的替代解释`+=.`。每当您编写`a += b`，而a不支持名为`+=`的方法时，Scala将尝试将其解释为`a = a + b`。
+
+```scala
+scala> val people = Set("Nancy", "Jane")
+people: scala.collection.immutable.Set[String] = Set(Nancy, Jane)
+
+scala>  people += "Bob"
+<console>:16: error: value += is not a member of scala.collection.immutable.Set[String]
+  Expression does not convert to assignment because receiver is not assignable.
+        people += "Bob"
+               ^
+
+scala> var people = Set("Nancy", "Jane")
+people: scala.collection.immutable.Set[String] = Set(Nancy, Jane)
+
+scala>  people += "Bob"
+
+scala> people
+res15: scala.collection.immutable.Set[String] = Set(Nancy, Jane, Bob)
+
+scala> people -= "Jane"
+
+scala>  people ++= List("Tom", "Harry")
+
+scala>  people
+res18: scala.collection.immutable.Set[String] = Set(Nancy, Bob, Tom, Harry)
+```
+
 ### 17.4 初始化集合
+
+如前所述，创建和初始化集合的最常见方法是将初始元素传递给所选集合的同伴对象上的工厂方法。只需将元素放在伴随对象名称后的括号中，Scala编译器就会将其转换为对伴生对象的apply方法的调用
+
+```scala
+scala> List(1, 2, 3)
+res19: List[Int] = List(1, 2, 3)
+
+scala> Set(1, 2, 3)
+res20: scala.collection.immutable.Set[Int] = Set(1, 2, 3)
+
+scala> import scala.collection.mutable
+import scala.collection.mutable
+
+scala> mutable.Map("hi" -> 1, "there" -> 2)
+res21: scala.collection.mutable.Map[String,Int] = Map(hi -> 1, there -> 2)
+
+scala> Array(1.0, 2.0, 3.0)
+res22: Array[Double] = Array(1.0, 2.0, 3.0)
+
+scala> val stuff = mutable.Set(42)
+stuff: scala.collection.mutable.Set[Int] = Set(42)
+
+scala> val stuff = mutable.Set[Any](42)
+stuff: scala.collection.mutable.Set[Any] = Set(42)
+
+scala> stuff += "abcd"
+res23: stuff.type = Set(abcd, 42)
+
+scala> val colors = List("blue", "red", "yellow", "green")
+colors: List[String] = List(blue, red, yellow, green)
+
+scala> import scala.collection.immutable.TreeSet
+import scala.collection.immutable.TreeSet
+
+scala> val treeSet = TreeSet(colors)
+<console>:18: error: No implicit Ordering defined for List[String].
+       val treeSet = TreeSet(colors) //不能将列表传给TreeSet
+                            ^
+
+scala> val treeSet = TreeSet[String]() ++ colors //先创建TreeSet，然后使用++操作符，将列表元素添加进TreeSet中
+treeSet: scala.collection.immutable.TreeSet[String] = TreeSet(blue, green, red, yellow)
+```
 
 #### 17.4.1 转换成数组或列表
 
+```scala
+scala> treeSet.toList
+res24: List[String] = List(blue, green, red, yellow)
+
+scala> treeSet.toArray
+res25: Array[String] = Array(blue, green, red, yellow)
+```
+
+但是转换到列表或数组通常需要复制集合的所有元素，因此对于大型集合可能很慢。但是，由于现有的API，有时您需要这样做。由于许多集合无论如何都只有几个元素，在这种情况下，速度损失很小。
+
 #### 17.4.2 在可变与不可变集及映射间转换
 
-### 17.5 元组	
+有时需要将可变集转换或映射为不可变集，反之亦然。要实现这一点，可以使用上面所示的技术，用列表的元素初始化TreeSet。使用empty方法创建新类型的集合，然后使用++或++=(根据目标集合类型选择)添加新元素。下面是将不可变TreeSet从上一个示例转换为可变集，然后再转换回不可变集的方法：
+
+```scala
+scala> treeSet
+res26: scala.collection.immutable.TreeSet[String] = TreeSet(blue, green, red, yellow)
+
+scala> val mutaSet = mutable.Set.empty ++= treeSet
+mutaSet: scala.collection.mutable.Set[String] = Set(red, blue, green, yellow)
+
+scala> val immutaSet = Set.empty ++ mutaSet
+immutaSet: scala.collection.immutable.Set[String] = Set(red, blue, green, yellow)
+```
+
+转换可变Map和不可变Map使用类似的方法：
+
+```scala
+scala> val muta = mutable.Map("i" -> 1, "ii" -> 2)
+muta: scala.collection.mutable.Map[String,Int] = Map(ii -> 2, i -> 1)
+
+scala>  val immu = Map.empty ++ muta
+immu: scala.collection.immutable.Map[String,Int] = Map(ii -> 2, i -> 1)
+```
+
+### 17.5 元组
+
+与Array和List不同的是，元组Tuple中可以拥有不同类型的元素：
+
+```scala
+(1, "hello", Console)
+```
+
+元组省去了定义简单数据量大的类的繁琐工作。元组节省了为类选择名称、选择定义类的作用域以及为类成员选择名称的工作。
+
+因为元组可以组合不同类型的对象，所以`元组不能被遍历`。如果您想要精确地分组一个整数和一个字符串，那么您需要一个元组，而不是列表或数组。`元组的一个常见应用是从一个方法返回多个值`。例如，下面的方法可以查找集合中最长的单词，并返回其索引：
+
+```scala
+def longestWord(words: Array[String]) = {
+  var word = words(0)
+  var idx = 0
+  for (i <- 1 until words.length){
+    if (words(i).length > word.length)
+      word = words(i)
+      idx = i
+  }
+  (word, idx)
+}
+
+scala> val longest = longestWord("the quick brown fox".split(" "))
+longest: (String, Int) = (quick,3)
+```
+
+获取元组中的元素，使用_1取出第一个元素，_2取出第二个元素，等等：
+
+```scala
+scala> longest._1
+res27: String = quick
+
+scala> longest._2
+res28: Int = 3
+```
+
+此外，您可以将元组的每个元素分配给它自己定义的变量：
+
+```scala
+scala> val (word, idx) = longest
+word: String = quick
+idx: Int = 3
+```
