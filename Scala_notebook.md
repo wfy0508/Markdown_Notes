@@ -3849,7 +3849,7 @@ def showFruit(fruit: Fruit) = {
 }
 ```
 
-`showFruit`中`fruit`是`Fruit`类型，直接���������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
+`showFruit`中`fruit`是`Fruit`类型，直接����������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
 
 Scala灵活导入包的方式：
 
@@ -5796,7 +5796,7 @@ res12: scala.collection.immutable.TreeSet[(Int, Char)] = TreeSet((1,x), (2,x), (
 
 除了可能更容易推理之外，如果集合中存储的元素数量很少，那么不可变集合通常可以比可变集合存储得更紧凑。例如，一个空的、默认表示为HashMap的可变映射大约占用80个字节，每增加一个条目，就增加16个字节。一个空的不可变Map，在所有引用之间共享的单一对象，因此对它的引用实际上只需要一个指针字段。
 
-此外，Scala集合库目前在单个对象中存储最多4个条目的不可变映射和集合，这通常占用16到40个字节，具体取决于集合中存储的条目数量。所以对于小型Map和Set，不可变版本比可变版本更紧凑。考虑到许多集合都很小，将它们切换为不可变可以带来重要的空间节省和性能优势。
+此外，Scala集合库目前在单个对象中存储最多4个条目的不可变映射和集合，这通常占用16到40个字节，具体取决于集合中存储的条目数量。所以对于小型Map和Set，不可变版本比可变版本更紧凑。考虑到许多集合都很小，将它们切换���不可变可以带来重要的空间节省和性能优势。
 
 为了更容易从不可变集合切换到可变集合，反之亦然，Scala提供了一些语法糖。尽管不可变Set和Map不支持真正的`+=`方法，但Scala提供了一种有用的替代解释`+=.`。每当您编写`a += b`，而a不支持名为`+=`的方法时，Scala将尝试将其解释为`a = a + b`。
 
@@ -5952,3 +5952,95 @@ scala> val (word, idx) = longest
 word: String = quick
 idx: Int = 3
 ```
+
+## 18 可变对象
+
+在前面的章节中，主要介绍了函数式不可变的对象上。这是因为没有任何可变状态的对象这个理念值得人们更多的关注。不过，在Scala中定义带有可变状态的对象也完全可行。当想要对真实世界中那些随着时间变换的对象进行建模时，自然而然就会想到这样的可变对象。
+
+### 18.1 什么样的对象是可变的
+
+对于不可变对象，比如字符列表：
+
+```scala
+val cs = List('a', 'b', 'c', 'd')
+```
+
+对`cs`调用`cs.head`总是返回`'a'`，无论在`cs.head`调用之前发生了任意数量，也不会改变。
+
+另一方面，对于可变对象而言，方法调用或字段访问的结果取决于之前这个对象被执行了哪些操作，可变对象的不错例子是银行账户：
+
+```scala
+class BankAccount{
+  private var bal: Int = 0
+  def balance: Int = bal
+
+  def deposit(amount: Int) = {
+    require(amount > 0)
+    bal += amount
+  }
+
+  def withdraw(amount: Int) = {
+    if (amount > bal) false
+    else {
+      bal -= amount
+      true
+    }
+  }
+}
+
+scala> val account = new BankAccount
+account: BankAccount = BankAccount@295bf2a
+
+scala> account deposit 100
+
+scala> account withdraw 80
+res1: Boolean = true
+
+scala> account withdraw 80
+res2: Boolean = false
+```
+
+一个类可能并没有定义或继承任何var变量，但它依然是可变的，因为它将方法调用转发到其他带有可变状态的对象上。反过来也是有可能的：一个类可能包含了var但却是纯函数式的。例如，某个类可能为了优化性能将开销巨大的操作结果缓存到字段中，如下，一个没有经过优化的Keyed类，其computeKey操作开销很大：
+
+```scala
+class Keyed{
+  def computeKey: Int = ...//这需要些时间
+}
+```
+
+假设computeKey既不读也不写任何var，可以通过添加缓存来让Keyed变得更加高效：
+
+```scala
+class MemoKeyed extends Keyed {
+  private var keyCache: Option[Int] = None
+  override def computeKey: Int = {
+    if (!keyCache.isDefined) keyCache = Some(super.computeKey)
+    keyCache.get
+  }
+}
+```
+
+使用MemoKeyed而不是Keyed可以提速，因为computeKey操作第二次被请求时，可以直接返回保存在KeyCache字段中的值，而不是再次运行computeKey。不过除了性能提升，Keyed和MemoKeyed类的行为完全一致。因此，如果说Keyed是纯函数式的，那么MemoKeyed同样也是，尽管它有一个可被重新复制的变量。
+
+## 18.2 可被中心赋值的变量和属性
+
+## 18.3 案例分析：离散事件模拟
+
+## 18.4 用于描述数字电路的语言
+
+## 18.5 Simulation API
+
+## 18.6 电路模拟
+
+### 18.6.1 Wire类
+
+### 18.6.2 inverter方法
+
+### 18.6.3 andGate和orGate方法
+
+### 18.6.4 模拟输出
+
+### 18.6.5 运行模拟器
+
+
+ 
