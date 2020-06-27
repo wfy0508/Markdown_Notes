@@ -6024,23 +6024,443 @@ class MemoKeyed extends Keyed {
 
 ## 18.2 可被中心赋值的变量和属性
 
+可以对可被重新赋值的变量做两种操作：
+
+- 获取它的值
+- 将它设为新值
+
+在像`JavaBean`的类库中，这些操作通常被包装秤单独的`getter`和`setter`方法，需要显式的定义这些方法。
+
+但是，在Scala中，每个`非私有的var成员`都隐式的定义了getter和setter方法，不过这些方法和Java的有些不同，`var x`的`getter方法`只是简单的命名为`“x”`，而他的`setter方法`命名为`"x_="`。
+
+例如：
+
+```scala
+var hour = 12
+```
+
+除了定义字段以外，还生成了`名为“hour”的getter`和`名为“hour_=”的setter方法`。其中的字段总是被标记为`private[this]`，意味着这个字段只能总包含它的对象中访问。
+
+而getter和setter则拥有跟原来的var相同的可见性。如果原先var定义为公有的，那么它的setter和getter也是公有的，如果是protected，那么setter和getter也是protected。
+
+举例如下：
+
+```scala
+class Time{
+  var hour = 12
+  var minute = 0
+}
+```
+
+与下面的定义完全一致：
+
+```scala
+
+```scala
+class Time{
+  private[this] var h = 12
+  private[this] var m = 0
+
+  def hour: Int = h
+  def hour_=(x: Int)={h = x}
+  
+  def minute: Int = m
+  def minute_=(x: Int)={m = x}
+}
+```
+
+这样的展开定义我们可以按照自己的意愿来解释变量访问和赋值。
+
+```scala
+class Time {
+  private[this] var h = 12
+  private[this] var m = 0
+  def hour: Int = h
+  def hour_= (x: Int) = {
+    require(0 <= x && x < 24)
+    h = x
+    }
+  def minute = m
+  def minute_= (x: Int) = {
+    require(0 <= x && x < 60)
+    m = x
+    }
+}
+```
+
+某些语言对于这些类似变量的值有特殊的语法表示，他们不同于普通常量的地方在于getter和setter可以被重新定义。
+
+有时，定义不跟任何字段关联的getter和setter也是有用的。
+
+```scala
+class Thermometer{
+  var celsius: Float = _ //下划线为缺省0值，具体取决于类型，Int为0，布尔值为false，不能简单写作var celsius: Float，只是定义一个抽象变量，而不是一个未赋值的变量。
+
+  def fahrenheit = celsius * 9 / 5 + 32 //getter方法
+  def fahrenheit_= (f: Float)={
+    celsius = (f - 32) * 5 / 9 //setter方法
+  }
+  override def toString = fahrenheit + "F/" + celsius + "C"
+}
+```
+
+```scala
+scala> var t = new Thermometer
+t: Thermometer = 32.0F/0.0C
+
+scala> t.celsius
+res6: Float = 0.0
+
+scala> t.celsius = 100
+t.celsius: Float = 100.0
+
+scala> t.celsius = -40
+t.celsius: Float = -40.0
+
+scala> t
+res7: Thermometer = -40.0F/-40.0C
+
+scala> t.fahrenheit = 100
+t.fahrenheit: Float = 100.0
+
+scala> t
+res8: Thermometer = 100.0F/37.77778C
+```
+
 ## 18.3 案例分析：离散事件模拟
 
-## 18.4 用于描述数字电路的语言
+......
 
-## 18.5 Simulation API
+## 19 类型参数化
 
-## 18.6 电路模拟
+设计一个纯函数式类，来呈现类型参数化和信息隐藏，因为信息隐藏可以被用于更通用的类型参数化变注解。
 
-### 18.6.1 Wire类
+类型参数化让我们能够编写泛型和注解。与Java不同，`Scala并不允许原生类型，Scala要求我们给出类型参数`，**型变定义了参数化类型的继承关系**，以Set[String]为例，型变定义了它是不是Set[AnyRef]的子类型。
 
-### 18.6.2 inverter方法
+### 19.1 函数时队列
 
-### 18.6.3 andGate和orGate方法
+函数式队列是一种数据结构，它支持三种操作：
 
-### 18.6.4 模拟输出
+- head 返回队列的第一个元素
+- tail 返回队列的最后一个元素
+- enqueue 返回一个将给定元素追加到队尾的新队列
 
-### 18.6.5 运行模拟器
+跟可变队列不同，函数式队列在新元素被追加时，其内容不会被修改，而是返回一个新的队列。
 
+本节主要实现的队列能够实现下列操作：
 
- 
+```scala
+
+```
+
+纯函数式队列还跟列表有一些相似：它们都被称为**完全持久化**(fully persistent)的数据结构，在经过扩展或修改后，老版本将继续可用。它们都支持head和tail操作，不同的是**列表添加元素是在列表头部扩展**，使用`::`操作；而**队列是在尾部扩展**，用的`euqueue`方法。
+
+要实现高效的操作，使head、tail和enqueue操作都以常量时间完成。实现函数式队列的一种简单方式使用列表作为表现类型。这样一来head和tail都只是简单地翻译为列表中相同的操作，而enqueue则通过列表的拼接实现。
+
+```scala
+class SlowAppendQueue[T](elems: List[T]){
+  def head = elems.head
+  def tail = new SlowAppendQueue(elems.tail)
+  def enqueue(x: T) = new SlowAppendQueue(elems ::: List(x))
+}
+```
+
+enqueue的操作时间跟队列中存放元素的数量成正比（:::操作，从后往前拼接）。如果想常量时间实现enqueue操作，可以`尝试将底层列表中的元素顺序反转过来，这样最后追加的元素出现在列表的头部`。
+
+```scala
+class SlowAppendQueue[T](smele: List[T]){
+  //smele是elems反转过来的意思
+  def head = smele.last //此操作与元素数量成正比
+  def tail = new SlowAppendQueue(smele.init) //此操作与元素数量成正比
+  def enqueue(x: T) = new SlowAppendQueue(x :: smele)
+}
+```
+
+从上面的两个例子，看上去无法将3种操作都做到常量时间。但有一种方法，将两种操作结合到一起，可以非常接近这个目标。背后的理念是leading和trailing两个列表来表示队列，leading列表包含队列中靠前的元素。trailing列表包含队列中靠后的元素，***按倒序排列***。整个队列在任何时刻的内容都等于`leading ::: trailing.reverse`。
+
+要追加一个元素，只需要用::操作将它追加到trailing，这样一来enqueue操作就是常量时间。这意味着，当开始为空的队列通过接连的enqueue操作初始化时，trailing列表会增长而leading列表保持为空。接下来在head和tail被执行到空的leading列表之前，整个trailing列表被复制到leading，同时元素的顺序被反转，这是通过mirror操作完成：
+
+```scala
+class Queue[T](
+  private val leading: List[T],
+  private val trailing: List[T]
+  ){
+    private def mirror = {
+      if (leading.isEmpty)
+        new Queue(trailing.reverse, Nil)
+      else
+        this
+    }
+    def head = mirror.leading.head
+    def tail = {
+      val q = mirror
+      new Queue(q.leading.tail, q.trailing)
+    }
+    def enqueue(x: T) = {
+      new Queue(leading, x :: trailing)
+    }
+  }
+```
+
+mirror操作耗时，与队列元素的数量成正比，但仅当leading为空时在发生。leading非空时，直接返回。由于head和tail调用了mirror，它的复杂度与队列的长度也成了线性关系，不过，顺着队列变长，mirror被调用的频率也会变低。当head、tail和enqueue三者的操作频次相对均衡时，这样的摊销复杂度是的整体操作耗时趋近于常量，否则这个论点不成立。
+
+### 19.2 信息隐藏
+
+上节例子中的操作效率很高，但是也有部分缺点，就是暴露了不必要的实现细节。如全局可访问的Queue构造方法接收列表列表作为参数，其中一个顺序还是反的：很难说是一个直观的对队列的表示，需要用代码将这个构造方法隐藏。
+
+#### 19.2.1 私有构造方法和工厂方法
+
+加上`private`来隐藏构造方法：
+
+```scala
+class Queue[T] private(
+  private val leading: List[T],
+  private cal trailing: List[T]
+)
+```
+
+类名和参数之前的`private`修饰符表示这个构造方法是私有的：`它只能从类本身及其伴生对象访问`，类名依然是公有的，因此可以把它当做类型来使用，但是不能调用其构造方法。
+
+既然Queue类的主构造方法不能从使用方代码调用，就需要定义别的方式来创建队列，一种可能的方式是添加一个辅助构造方法：
+
+```scala
+def this() = this(Nil, Nil)
+
+//或者
+def this(elems: T*) = this(elems.toList, Nil) //T*用来表示重复的参数
+```
+
+另一种但是是创建其伴生对象：
+
+```scala
+object Queue{
+  def apply[T](xs: T*) = new Queue(xs.toList, Nil)
+}
+```
+
+因为Queue是对象而不是一个函数，Queue使用起来就像全局定义的工厂方法一样，实际上Scala并没有全局课件的方法，每个方法都必须被包含在某个对象或某个类中。不过，通过在全局对象中使用apply方法，可以支持看上去像是全局方法的使用模式。
+
+#### 19.2.2 备选方案：私有类
+
+私有构造方法和私有成员只是隐藏类的初始化和内部表现形式的一种方法。另一种更加激进的方式是隐藏整个类，并且只暴露一个反映类的公有接口的特质。
+
+```scala
+trait Queue[T]{
+  def head: T
+  def tail: Queue[T]
+  def enqueue(x: T): Queue[T]
+}
+
+object Queue{
+  def apply[T](xs: T*): Queue[T] = {
+    new QueueTmp1[T](xs.toList, Nil)
+  }
+  private class QueueTmp1[T]( //直接隐藏整个类
+    private val leading: List[T],
+    private val trailing: List[T]
+  ) extends Queue[T]{
+    def mirror = {
+      if(leading.isEmpty)
+        new QueueTmp1(trailing.reverse, Nil)
+      else
+        this
+    }
+    def head: T = mirror.leading.head
+    def tail: QueueTmp1[T] = {
+      val q = mirror
+      new QueueTmp1(q.leading.tail, q.trailing)
+    }
+    def enqueue(x: T) = {
+      new QueueTmp1(leading, x :: trailing)
+    }
+  }
+}
+```
+
+### 19.3 型变注解
+
+Queue被定义为一个trait，因为它接受一个类型参数，如下定义无法编译：
+
+```scala
+scala> def doesNotComplie(q: Queue) = {} //Queue需要有类型参数
+<console>:13: error: trait Queue takes type parameters
+       def doesNotComplie(q: Queue) = {}
+                             ^
+```
+
+特质可以让我们执行参数化的类型，比如，Queue[AnyRef]、Queue[String]、Queue[Int]等。
+
+```scala
+scala> def doesComplie(q: Queue[AnyRef]) = {}
+doesNotComplie: (q: Queue[AnyRef])Unit
+```
+
+Queue是一个特质，Queue[String]是一个类型。Queue也被称为类型构造方法(type constructor)，因为可以通过执行类型参数来构造一个类型。类型构造方法Queue能够“生成”成组的类型，包括Queue[Int]、Queue[String]、Queue[AnyRef]等。
+
+也可以将Queue说成是一个**泛型**的特质，可以通过泛化的类或特质来定义许许多多具体的类型，在上述例子中，Queue特质就是定义了一个泛型的队列，Queue[Int]和Queue[String]就是哪些具体的类型。
+
+类型参数和子类型这两个概念放在一起，就会有一些有趣的问题，例如通过Queue[T]生成的具体类型之间有没有特殊的子类型关系，更确切的说，`Queue[String]是不是Queue[AnyRef]的子类型?`
+
+`如果S是T的子类型，那么Queue[S]是不是Queue[T]子类型`？如果是，可以说Queue特质在类型参数T上是**协变(convariant)**的。`由于Queue只有一个参数，也可以简单的说Queue是协变的`。协变的Queue意味着传入一个Queue[String]到前面doesCompile方法，这个方法接收的类型为Queue[AnyRef]的值参数。
+
+直观地讲，所有这些看起来都是没有问题的，因为一个String的队列看上去就像是AnyRef的队列的特例。不过，在Scala中，`泛型类型默认的子类型规则是不变(noconvariant)的`。也就是说像上例Queue定义，`不同元素类型的队列之间永远不会存在子类型关系`。`Queue[String]不能当做Queue[AnyRef]的子类型使用`。
+
+不过可以修改定义来要求队列的子类型关系是协变得：
+
+```scala
+trait Queue[+T]{...}
+```
+
+在类型参数T前面，加上`"+"表示在参数上是协变的`，这样Queue[String]就能当做Queue[AnyRef]的子类型使用。
+
+此外，还有逆变(contravariant)的子类型关系：
+
+```scala
+trait Queue[-T]{...}
+```
+
+那么，`如果S是T的子类型，则Queue[T]是Queue[S]的子类型`。**类型参数协变的、逆变的、还是不变的，都被称为类型参数的型变(variance)**。可以放在类型参数旁边的"+"和"-"被称为`型变注解`。
+
+如定义一下例子：
+
+```scala
+class Cell[T](init: T){
+  private[this] var current = init
+  def get = current
+  def set(x: T) = {current = x}
+}
+```
+
+然后定义：
+
+```scala
+val c1 = new Cell[String]("abc")
+val c2: Cell[Any] = c1
+c2.set(1)
+val s: String = c1.get
+```
+
+单看上述4行定义都没有问题，但是放在一块就出现了问题，Cell被声明为非协变的，c2的定义就会抛出type mismatch的错误。最后一行讲一个Int类型的1赋值给了String类型的s，这显然有悖于类型约束。
+
+第二行用到了协变的子类型关系，但是String的Cell并不同时是Any的Cell，因为有些我们对Any的Cell做的事并不能对String的Cell做。举例来说，并不能对String的Cell使用参数为Int的set。
+
+```scala
+scala> val c1 = new Cell[String]("abc") //Cell为
+c1: Cell[String] = Cell@3e230171
+
+scala> val c2: Cell[Any] = c1
+<console>:13: error: type mismatch;
+ found   : Cell[String]
+ required: Cell[Any]
+Note: String <: Any, but class Cell is invariant in type T.
+You may wish to define T as +T instead. (SLS 4.5)
+       val c2: Cell[Any] = c1
+                           ^
+```
+
+假如将Cell的类型参数声明为协变的，在调用时，还会得到一个错误：
+
+```scala
+scala> class Cell[+T](init: T){
+     | private[this] var current = init
+     | def get = current
+     | def set(x: T) = {current = x}
+     | }
+<console>:14: error: covariant type T occurs in contravariant position in type T of value x
+       def set(x: T) = {current = x}
+               ^
+```
+
+#### 19.3.1 型变和数组
+
+这个行为和Java比较会很有趣，从原理上讲，数组和单元格很像，只不过数组可以有多于一个元素。尽管如此，在Java中数据被当做协变来处理的。看如下Java代码：
+
+```java
+String[] a1 = {"abc"};
+Object[] a2 = a1;
+a2[0] =  new Integer(17);
+String s = a1[0];
+```
+
+如果执行代码，发现是能通过编译的，不过在运行时，当a2[0]被赋值一个Integer，程序就会抛出ArrayStoreException。
+
+发生了什么？Java在运行时会保存数组的元素类型，每当数组元素被更新时，都会检查新元素是否满足保存下来的类型要求。如果新元素不是这个类型的实例，就会抛出ArrayStoreException。
+
+Java这样的设计，需要协变的数组，才能让任意引用类型的数组得以传入这个方法。当然随着Java泛型的引入，不再需要协变的数组。不过由于兼容性的原因，还保留了这样的做法。
+
+Scala在这一点上比Java做的更加纯粹，它并不把数组当做协变的。如果尝试把代码的前两行翻译为Scala语言，就像这样：
+
+```scala
+scala> val a1 = Array("abc")
+a1: Array[String] = Array(abc)
+
+scala> val a2: Array[Any] = a1
+<console>:12: error: type mismatch;
+ found   : Array[String]
+ required: Array[Any]
+Note: String <: Any, but class Array is invariant in type T.
+You may wish to investigate a wildcard type such as `_ <: Any`. (SLS 3.2.10)
+       val a2: Array[Any] = a1
+                            ^
+```
+
+发现报错了，这是因为Scala将数组处理为不变（刻板的），因此Array[String]并不能当做是Array[Any]处理。
+
+但是，Scala允许将元素类型为T的数组类型，转换为T的任意超类的数组：
+
+```scala
+scala> val a2: Array[Object] = a1.asInstanceOf[Array[Object]]
+a2: Array[Object] = Array(abc)
+```
+
+编译时永远合法，且运行时也会永远成功，因为JVM的底层运行时，把数组的处理当做协变的。不过，跟Java一样，可能在这之后，会得到一个ArrayStoreException。
+
+### 19.4 检查型变注解
+
+所有对类型可靠性的违背都设计可被重新赋值的字段或数组元素。与此相对应，纯函数式实现的队列看上去是协变不错的候选人。不过通过如下的例子你会看到，即便没有可被重新赋值的字段，还是有办法能“刻意地作出”不可靠的情况。
+
+假定在19.2.2中定义的Queue是协变的，然后创建一个特别针对元素类型Int的队列子类，重写enqueue方法：
+
+```scala
+class StrangeIntQueue extends Queue[Int]{
+  override def enqueue(x: Int) = {
+    println(math.sqrt(x))
+    super.enqueue(x)
+  }
+}
+```
+
+StrangeIntQueue的enqueue方法会先打印出入参的平方根，然后再做追加操作。现在，做出一个反例：
+
+```scala
+val x: Queue[Any] = new StrangeIntQueue
+x.enqueue("abc")
+```
+
+对一个字符串求平方根，这完全讲不通。显然，`并不仅仅是可变字段能让协变类型变得不可靠`。还有更深层次的问题。`一旦泛型参数类型作为方法参数类型，包含这个泛型参数的类或特质就不能以那个类型做协变`。
+
+对于队列而言，enqueue方法违背了这个条件：
+
+```scala
+class Queue[+T]{  //类型参数协变
+  def enqueue(x: T){ //方法参数并没有协变
+    x
+  }
+}
+
+error: covariant type T occurs in contravariant position in type T of value x
+  def enqueue(x: T){
+              ^
+```
+
+> ☆☆☆☆☆ 可被重新赋值的字段是如下规则的特例：`用+注解的类型参数不允许用于方法参数的类型`。正如在18.2节中提到的，一个被重新赋值的字段“var x: T”在Scala中被当做getter方法“def x: T”和setter方法“def x_=(y: T)”。我们看到setter方法有一个参数，其类型为字段类型T，因此这个类型不能是协变的。
+
+此外，最重要的一点，`Scala编译器会检查你加在类型参数上任何型变注解`。例如，`如果你尝试生命一个类型为协变的（添加一个+），但是有可能引发潜在的运行时错误，你的程序将无法通过编译`。
+
+### 19.5 下界
+
+### 19.6 逆变
+
+### 19.7 对象私有数据
+
+### 19.8 上界
