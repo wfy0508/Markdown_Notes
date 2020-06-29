@@ -6459,8 +6459,241 @@ error: covariant type T occurs in contravariant position in type T of value x
 
 ### 19.5 下界
 
+之前队列类Queue中的类型参数T不能定义为协变的，因为T在enqueue方法中作为参数类型出现，这里是一个逆变点。
+
+幸运的是，有一种方式可以改变这种场景，使用多态来泛化enqueue，为其参数类型执行一个下界(lower bound)：
+
+```scala
+class Queue[+T](
+  private[this] var leading: List[T],
+  private[this] var trailing: List[T]
+){
+  def enqueue[U >: T](xs: U) = {
+    new Queue[U](leading, xs :: trailing)
+  }
+}
+```
+
+为enqueue方法定义了一个新的参数U，语法为U >: T，代表T为U的下界，也就是U必须是T的超类型（超类型和子类型关系是自反的，这意味着类型既是它自己的超类型又是它自己的子类型。），即使T是U的下界，你仍然可以传递一个T给方法enqueue。
+
+例如，有一个名为Fruit的类和它的两个子类Apple和Orange，如果定义了一个新类Queue，就可以将Orange添加到Queue[Apple]，其结果将是Queue[Fruit]。
+
+可以说，队列的新定义比原来定义更好，因为它更通用。与旧版本不同，新定义允许附加队列元素类型T的任意超类型U，结果是Queue[U]。由于Queue的类型参数也定义为协变的，这就为创建不同元素类型的队列提供了适当的灵活性。
+
+这表明协变声明和下界组合在一起可以很好地发挥作用。它们是`类型驱动设计`的好例子，其中接口的类型指导其详细设计和实现。
+
+对于队列，可能没有想到使用一个下界来改进enqueue的实现。在此之前，你可能决定让队列协变，在这种情况下，编译器会指出队列的协变错误。通过增加一个下界来修正方差误差可以使队列更通用，队列作为一个整体也更有用。
+
+> ※※※ 与Java不同的是，Scala选择在`声明点协变`而不是定义在`用户调用点协变`
+。在Java中，定义为用户调用点协变，您需要自己设计一个类。需要使用通配符的将是类的入口，如果使用时遇到错误，后续一些重要的实例方法将不再适用。协变就是一个棘手的问题，用户通常会犯错误，他们会认为通配符和泛型过于复杂。通过`定义端协变`，可以向编译器表达意图，编译器会检查想要可用的方法是否确实可用。
+
 ### 19.6 逆变
+
+前面讨论了协变和非协变，有时逆变也是常用的。
+
+```scala
+trait OutputChannel[-T]{
+  def write(x: T)
+}
+```
+
+OutputChannel中的类型参数T定义为逆变。举个例子，AnyRef的output channel是String output channel的子类型，虽然看起来有违直觉，但它确实能讲得通的。OutputChannel[String]仅支持String类型写入操作。写入String类型的操作同样可以应用到OutputChannel[AnyRef]。所以使用OutputChannel[AnyRef]替换OutputChannel[String]是没有什么问题的，但是反过来就不可行，因为OutputChannel[String]不能写入String类型以外的值。
+
+这个推理指向类型系统设计中的一个通用原则：`如果您可以在需要类型U的地方替换类型T的值，那么可以安全地假设类型T是类型U的子类型`，这种原则称为**里氏替换原则**(Liskov Substitution Principle)。
+
+如果T支持与U相同的操作，并且T的所有操作都需要更少而比U提供更多的相关操作。在这种情况下，OutputChannel[AnyRef]可以是OutputChannel[String]的子类型，因为这两个操作支持相同的写操作，并且该操作在OutputChannel[AnyRef]中比在OutputChannel[String]中要求的条件更少。“更少”意味着参数在第一种情况下只需要入参是AnyRef，而后者要求入参是String。
+
+有时协变和逆变混合在同一类型中。一个典型的例子是Scala的函数特质。例如，当编写函数类型`A => B`时，Scala将其展开成`Function1[A, B]`。
+
+```scala
+trait Function1[-S, +T]{
+  def apply(x: S): T
+}
+```
+
+标准库中Function1的定义使用了协变和逆变：Function1特质`在入参类型S上是逆变，在结果类型T上协变`，如下所示。这满足了里氏替换原则，因为函数入参是对外的要求，结果是函数向外提供的返回值。
+
+举例如下：
+
+```scala
+class Publication(var title: String)
+class Book(title: String) extends Publication(title)
+
+object Library {
+  val books: Set[Book] = {
+    Set(
+      new Book("Programming in Scala"),
+      new Book("Walden")
+    )
+  }
+  def printBookList(info: Book => AnyRef) = {
+    for (book <- books) println(info(book))
+  }
+}
+
+object Customer extends App {
+  def getTitle(p: Publication): String = p.title
+  Library.printBookList(getTitle)
+}
+```
+
+最后一行，调用了Library的printBookList，并将getTitle作为参数传入：
+
+```scala
+Library.printBookList(getTitle)
+```
+
+这行可以通过编译器的检查，尽管函数的结果类型String是printBookList的info参数的结果类型AnyRef的子类型。这段代码能够通过编译是因为函数的结果类型被声明为协变的。
+
+printBookList方法会遍历Book列表，并对每本书调用传入的函数，它将info返回的AnyRef结果传入println，由它调用并打印出结果，这个动作对String和AnyRef的任何子类都可行，这就是函数的结果类型协变的意义。
+
+printBookList方法的函数的参数类型声明为Book，传入给getTitle方法的参数却是Publication，它是Book的子类型。这样之所以可行，背后的原因是：`由于printBookList的参数类型是Book，printBookList的方法体只能将Book传入，而由于getTitle的参数类型是Publication，这个函数的函数体只能对其参数p访问Publication类中声明的成员。由于Publication中声明的所有方法都在其子类Book中可用，一切都应该可以工作，这就是函数参数类型逆变的意义。`
+
+```plain txt
+ ┌------┐     ┌-------------┐
+ | Book | --> | Publication |
+ └------┘     └-------------┘
+
+ ┌----------------┐     ┌-----------------------┐
+ | Book => AnyRef | <-- | Publication => String |
+ └----------------┘     └-----------------------┘
+
+ ┌--------┐     ┌--------┐
+ | AnyRef | <-- | String |
+ └--------┘     └--------┘
+```
+
+上面的代码能通过编译，是由于`Publication => String`是`Book => AnyRef`的子类型。由于Function1的结果类型定义为协变，上图中下部的显示两个结果类型的继承关系跟中部函数的继承关系方向是相同的，而由于Function入参类型定义为逆变，图中上部显示的两个参数类型的继承关系和函数的继承关系方向是相反的。
 
 ### 19.7 对象私有数据
 
+前面定义的Queue类有一个问题，就是leading一直为空，如果连续调用mirror操作会反复地从trailing拷贝元素到leading。这种无畏的拷贝可以通过添加副作用的方式避免，下面的下代码，对连续的head操作最多执行一次trailing到leading的拷贝，但每次拷贝都会有两个副作用，而不是返回新的队列，这个副作用纯粹是Queue内部的，对使用方不可见，仍然是纯函数式对象。
+
+```scala
+class Queue[+T] private(
+  private[this] var leading: List[T],
+  private[this] var trailing: List[T]
+){
+  private def mirror() = {
+    if (leading.isEmpty) {
+      while (!trailing.isEmpty){
+        leading = trailing.head :: leading
+        trailing = trailing.tail
+      }
+    }
+  }
+  def head: T = {
+    mirror()
+    leading.head
+  }
+  def tail: Queue[T] = {
+    mirror()
+    new Queue (leading.tail, trailing)
+  }
+  def enqueue[U >: T](x: U) = {
+    new Queue[U](leading, x :: trailing)
+  }
+}
+```
+
+这样的定义是怎么通过编译器的检查的，毕竟队列现在包含两个协变的参数类型T的可被从新赋值的字段，这不是违背了型变规则？的确有这个嫌疑，不过leading和trailing带上了private[this]的修饰符，因而对象是私有的。只能从对象的内部访问，从而`从定义变量的同一个对象访问这些变量`并不会造成型变的问题。
+
+只管的理解是，**如果我们要构造一个型变会引发类型错误的场景，需要引入一个从静态类型上比定义该对象更弱的对象，而访问对象私有值的情况，这是不可能出现的**。
+
+Scala的型变检查对于对象私有定义有一个特殊规则，`在检查带有+或-的类型个参数只应出现在相同的型变归类的位点时，会忽略掉对象私有的定义`。但是如果漏掉这两个private修饰符的[this]限定词，我们将看到如下错误：
+
+```scala
+13: error: covariant type T occurs in contravariant position in type List[T] of value leading_=
+  private var leading: List[T],
+              ^
+14: error: covariant type T occurs in contravariant position in type List[T] of value trailing_=
+  private var trailing: List[T]
+              ^
+```
+
 ### 19.8 上界
+
+如前面16章中的例子，展示了一个接收比较函数作为第一个入参，以及一个要排序的列表作为第二个（柯里化）入参的归并排序函数。也可以用另一种方式来组是这样一个排序函数，那就是要求列表的类型是混入了Ordered特质的，就像12.4节提到的，通过混入Ordered并实现Ordered特质的首相方法compare，可以让类的使用方代码<、>、<=和>=来比较实例，例如：
+
+```scala
+class Person(val firstName: String, val lastName: String) extends Ordered[Person]{
+  def compare(that: Person) = {
+    val lastNameComparison = lastName.compareToIgnoreCase(that.lastName)
+    if (lastNameComparison != 0)
+      lastNameComparison
+    else
+      firstName.compareToIgnoreCase(that.firstName)
+  }
+  override def toString = firstName + " " + lastName
+}
+
+scala> val robet = new Person("Robert", "Jones")
+robet: Person = Robert Jones
+
+scala> val sally = new Person("Sally", "Smith")
+sally: Person = Sally Smith
+
+scala> robet > sally
+res0: Boolean = false
+
+scala> robet < sally
+res1: Boolean = true
+```
+
+为了确保传入到这个新的排序函数的列表类型混入了Ordered，需要使用上界(upper bound)。上界的指定方式跟下界类似，用符号`<:`
+
+```scala
+def orderedMergeSort[T <: Ordered[T]](xs: List[T]): List[T] = {
+  def merge(xs: List[T], ys: List[T]): List[T] = (xs, ys) match {
+    case (Nil, _) => ys
+    case (_, Nil) => ys
+    case (x :: xs1, y :: ys1) =>
+      if (x < y) x :: merge(xs1, ys)
+      else y :: merge(xs, ys1)
+  }
+  val n = xs.length / 2
+  if (n == 0) xs
+  else {
+    val (ys, zs) = xs splitAt n
+    merge(orderedMergeSort(ys), orderedMergeSort(zs))
+  }
+}
+
+orderedMergeSort: [T <: Ordered[T]](xs: List[T])List[T]
+```
+
+通过“`T <: Ordered[T`]”这样的语法，告诉我们编译器`类型参数T有一个上界Order[T]`。这意味着`orderedMergeSort的列表元素类型必须是Ordered的子类型`。可以将List[Person]传给orderedMergeSort，因为Person混入了Ordered。
+
+```scala
+val people = List(
+  new Person("Larry", "Wall"),
+  new Person("Anders", "Hejlsberg"),
+  new Person("Guido", "van Rossum"),
+  new Person("Alan", "Kay"),
+  new Person("Yukihiro", "Matsumoto")
+)
+
+people: List[Person] = List(Larry Wall, Anders Hejlsberg, Guido van Rossum, Alan Kay, Yukihiro Matsumoto)
+```
+
+由于这个列表的元素类型Person混入了Ordered[Person]（也就是说它是Ordered[Person]的子类型），可以将这个列表传入orderedMergeSort：
+
+```scala
+val sortedPeople = orderedMergeSort(people)
+
+sortedPeople: List[Person] = List(Anders Hejlsberg, Alan Kay, Yukihiro Matsumoto)
+```
+
+它实际上并不是Scala中利用Ordered特质设计排序函数的最通用的方式。举例来说，我们并不能用orderedMergeSort来对整数列表进行排序，因为Int类并不是Ordered[Int]的子类型：
+
+```scala
+scala> val wontCompile = orderedMergeSort(List(3, 2, 1))
+<console>:12: error: inferred type arguments [Int] do not conform to method orderedMergeSort's type parameter bounds [T <: Ordered[T]]
+       val wontCompile = orderedMergeSort(List(3, 2, 1))
+                         ^
+<console>:12: error: type mismatch;
+ found   : List[Int]
+ required: List[T]
+       val wontCompile = orderedMergeSort(List(3, 2, 1))
+                                              ^
+```
