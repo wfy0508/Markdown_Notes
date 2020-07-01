@@ -6056,7 +6056,7 @@ class Time{
 
 ```scala
 
-```scala
+​```scala
 class Time{
   private[this] var h = 12
   private[this] var m = 0
@@ -6150,7 +6150,14 @@ res8: Thermometer = 100.0F/37.77778C
 本节主要实现的队列能够实现下列操作：
 
 ```scala
+scala> val q = Queue(1, 2, 3)
+q: Queue[Int] = Queue(1, 2, 3)
 
+scala> val q1 = q enqueue 4
+q1: Queue[Int] = Queue(1, 2, 3, 4)
+
+scala> q
+res0: Queue[Int] = Queue(1, 2, 3)
 ```
 
 纯函数式队列还跟列表有一些相似：它们都被称为**完全持久化**(fully persistent)的数据结构，在经过扩展或修改后，老版本将继续可用。它们都支持head和tail操作，不同的是**列表添加元素是在列表头部扩展**，使用`::`操作；而**队列是在尾部扩展**，用的`euqueue`方法。
@@ -6697,3 +6704,333 @@ scala> val wontCompile = orderedMergeSort(List(3, 2, 1))
        val wontCompile = orderedMergeSort(List(3, 2, 1))
                                               ^
 ```
+
+## 20 抽象成员
+
+如果类或特质的成员在类中没有完整的定义，则该成员是抽象的。类中声明的抽象成员在它的子类中具体实现。
+
+在本章中，将描述所有四种抽象成员：vals、var、方法和类型。在此过程中，我们将讨论`预初始化的字段`、`惰性vals`、`路径依赖类型`和`枚举`。
+
+### 20.1 快速浏览轴向成员
+
+定义抽象成员：
+
+```scala
+trait Abatract{
+  type T
+  def transform(x: T): T
+  val initial: T
+  var current: T
+}
+```
+
+抽象的具体实现需要为其每个抽象成员实现定义：
+
+```scala
+class Concrete extends Abstract{
+  type T = String
+  def transform (x: T) = x + x
+  val initial = "hi"
+  var current = initial
+}
+```
+
+### 20.2 类型成员
+
+从上一节的示例中可以看到，Scala中抽象类型意味着使用type关键字声明一个类型，而没有指定定义。类本身可能是抽象的，特质在定义上也是抽象的，但这两种类型在Scala中都不是抽象类型。
+
+在Scala中，`抽象类型总是类或特质的成员`，就像T是Abstract的类型成员。
+
+可以将非抽象(或“具体”)类型成员(例如类Concrete中的类型T)视为为类型定义新名称或别名的方法。在Concrete中，将String赋给了别名为T的类型，在类中的任何位置，T都是String。
+
+`使用类型成员的一个原因是为类型定义一个简短的描述性别名`，它的真实名称比别名更冗长，或者含义更不明显，类型成员可以帮助你简洁地阐明类或特质的代码。类型成员的其他主要用途是声明必须在子类中定义的抽象类型。
+
+### 20.3 抽象vals
+
+抽象vals的定义类似于：
+
+```scala
+val initial: String
+```
+
+对一个val定义了类型，但并没有给出值，具体的实现在Concrete中实现：
+
+```scala
+val initial = "hi"
+```
+
+抽象vals的声明，类似于一个无参方法的定义：
+
+```scala
+def initial: String
+```
+
+从使用方来看，两者的定义没有任何区别。但是，如果initial是一个抽象val，使用方调用`obj.initial`每次都会返回相同的值；而如果initial是一个抽象方法，就未必是这样。作为抽象方法，在子类中实现时，可以在每次调用时都返回不同的值。
+
+换句话说，抽象val的执行规则有限制：`任何实现都必须为一个val的定义，不能使用var或者def`。另一方面，抽象方法声明可以通过具体的方法定义和具体的val定义来实现。下面例子中，抽象类Fruit，子类Apple是合法的，但BadApple则不行：
+
+```scala
+abstract class Fruit{
+  val v: String
+  def m: String
+}
+abstract class Apple extends Fruit{
+  val v: String
+  val m: String
+}
+abstract class BadApple extends Fruit{
+  def v: String //编译器会报错，不能使用def来实现一个val
+  def m: String
+}
+
+<console>:13: error: overriding value v in class Fruit of type String;
+ method v needs to be a stable, immutable value
+       def v: String
+           ^
+```
+
+### 20.4 抽象vars
+
+和抽象vals定义类似，抽象vars的定义：
+
+```scala
+trait AbstractTime{
+  var hour: Int
+  var minute: Int
+}
+```
+
+声明为类成员的vars自动定义了getter和setter方法，与下面定义一致：
+
+```scala
+trait AbstractTime{
+  var hour: Int
+  var hour_=(x: Int)
+  var minute: Int
+  var minute_=(x: Int)
+}
+```
+
+### 20.5 初始化抽象vars
+
+抽象的vals有时起到类似于超类参数的作用：`允许在子类中实现父类缺少的详细信息`。这对于特质来说特别重要，`因为特质没有可以传递参数的构造函数`。因此，参数化特征的通常概念是通过抽象vals，在子类中实现的。
+
+现在重构在第6章中实现的Rational：
+
+```scala
+trait RationalTrait{
+  val numerArg: Int
+  val denomArg: Int
+}
+```
+
+在第六章中，Rational有两个参数，n和d，这里定义了两个抽象成员numerArg和denomArg，然后实例化：
+
+```scala
+new RationalTrait{
+  val numerArg = 1
+  val denomArg = 2
+}
+```
+
+这个表达式生成一个匿名类的实例，该匿名类混合了特质，这个特定的匿名类实例化的效果类似于创建新的实例`new Rational(1,2)`。
+
+然而，这个类比并不完美。在表达式初始化的顺序上有一个细微的差别，当你写：
+
+```scala
+new Rational(expr1, expr2)
+```
+
+在Rational实例化之前，会检查expr1和expr2两个参数，是否在Rational中可用。
+
+对于特质，则恰好相反：
+
+```scala
+new RationalTrait{
+  val numerArg = expr1
+  val denomArg = expr2
+}
+```
+
+表达式、expr1和expr2作为匿名类初始化的一部分进行计算，但是匿名类在初始化RationalTrait之后进行初始化。因此，在RationalTrait的初始化过程中，numerArg和denomArg的值是不可用的(更精确的来说，使用任何一个值都会返回一个默认Int类型的值0)。对于前面RationalTrait的代码定义，这并不是一个问题，因为特质的初始化不会用到numerArg和denomArg的值。
+
+但是对于下面的例子来说，就会有问题：
+
+```scala
+trait RationalTrait{
+  val numerArg: Int
+  val denomArg: Int
+  require (denomArg != 0) //在初始化时，denomArg的值为0，require调用失败
+  private val g = gcd(numerArg, denomArg)
+  val numer = numerArg / g
+  val denom = denomArg / g
+  private def gcd(a: Int, b: Int): Int = {
+    if (b == 0) a else gcd(b, a % b)
+  }
+  override def toString = numer + "/" + denom
+}
+
+scala> val x = 2
+x: Int = 2
+
+scala> new RationalTrait{
+     | val numerArg = 1 * x 
+     | val denomArg = 2 * x //初始化时，denomArg是0
+     | }
+java.lang.IllegalArgumentException: requirement failed
+  at scala.Predef$.require(Predef.scala:268)
+  at RationalTrait.$init$(<pastie>:14)
+  ... 32 elided
+```
+
+如果您尝试用一些不是简单的文字的分子和分母表达式实例化这个特质，您将得到一个异常。这个示例中的异常被抛出，因为当类RationalTrait初始化时，denomArg的默认值仍然是0，这会导致require调用失败。
+
+这个示例，展示了类参数和抽象字段的初始化顺序不同。`类参数`在`传递给类构造函数之前就已经被计算`(除非参数是按名称的)。与此不同的是，`子类中的val实现定义只有在超类被初始化之后才计算`。
+
+现在已经知道了抽象vals和类参数的不同，后面介绍两种不同的初始化方式来优化这种场景，分别为`预初始化字段(pre-initialized fields)`和`惰性vals(lazy vals)`。
+
+#### 20.5.1 预初始化字段
+
+第一个解决方案是预初始化字段，它允许`在调用超类之前初始化子类的字段`。为此，只需在超类构造函数调用之前将字段定义放在大括号中。
+
+```scala
+new {
+  val numerArg = 1 * x
+  val denomArg = 2 * x
+} with RationalTrait
+```
+
+预初始化的字段不限于匿名类，它们也可以在对象或具名子类中使用。
+
+```scala
+object twoThirds extends{
+  val numerArg = 2
+  val denomArg = 3
+} with RationalTrait
+
+
+class RationalClass(n: Int, d: Int) extends{
+  val numerArg = n
+  val denomArg = d
+}with RationalTrait{
+  def + (that: RationalClass) = new RationalTrait(
+    numerArg * that.denomArg + that.numerArg * denomArg,
+    denomArg * that.denomArg
+  )
+}
+```
+
+因为预初始化的字段是在调用超类构造器之前初始化的，它们的初始化器不能引用正在构造的对象。因此，如果初始化器引用`this`，那么指向包含正在构造的类或对象的对象，而不是被构造的对象本身。
+
+```scala
+scala> new {
+     | val numerArg = 1
+     | val denomArg = this.
+     | val denomArg = this.numerArg * 2
+     | } with RationalTrait
+<console>:15: error: value numerArg is not a member of object $iw
+       val denomArg = this.numerArg * 2
+                           ^
+```
+
+该示例没有通过编译，因为引用了`this.numerArg`，这个操作会`在包含new对象`(在本例中是名为$iw的合成对象，解释器将用户输入行放入其中)`的对象中寻找numerArg字段。`再者，预初始化的字段在这方面的行为类似于类构造函数参数。
+
+#### 20.5.2 惰性vals
+
+可以使用预先初始化的字段精确地模拟类构造函数参数的初始化行为。但是，有时您可能更愿意让系统自己来确定应该如何初始化。可以通过在`val之前加上lazy标识符`来实现，等式右边的表达式会在第一次引用val变量时计算。
+
+下面举例说明：
+
+```scala
+scala> object Demo{
+     | val x = {println("initialing x"); "done"}
+     | }
+defined object Demo
+
+scala> Demo
+initialing x
+res1: Demo.type = Demo$@182e7eda
+
+scala> Demo.x
+res2: String = done
+```
+
+在使用Demo时，它的x字段就被初始化了，x的初始化时Demo初始化的一部分。如果加上`lazy`标识符：
+
+```scala
+scala> object Demo{
+     | lazy val x = {println("initialing x"); "done"}
+     | }
+defined object Demo
+
+scala> Demo //x没有被初始化
+res3: Demo.type = Demo$@25109608
+
+scala> Demo.x //在调用时，被初始化
+initialing x
+res4: String = done
+```
+
+初始化Demo并不涉及初始化x，x的初始化将被推迟到第一次使用x时。类似于使用def将x定义为无参数方法的情况，但是与def不同的是，lazy val永远不会被计算超过一次。实际上，在惰性val的第一次求值之后，将存储求值的结果，以便在随后使用相同的val时重用。
+
+从这个例子可以看出，像lazy val的定义，可以只有在使用时才被初始化。实际上，`对象定义可以看作是使用描述对象内容的匿名类的惰性val定义的简写`。
+
+使用lazy vals可以将RationalTrait修改成如下：
+
+```scala
+trait LazyRationalTrait{
+  val numerArg: Int
+  val denomArg: Int
+  lazy val numer = numerArg / g
+  lazy val denom = denomArg / g
+  override def toString = numer + "/" + denom
+  private lazy val g = {
+    require(denomArg != 0)
+    gcd(numerArg, denomArg)
+  }
+  private def gcd(a: Int, b: Int): Int = {
+    if (b == 0) a else gcd(b, a % b)
+  }
+}
+
+scala> val x = 2
+x: Int = 2
+
+scala> new LazyRationalTrait{
+     | val numerArg = 1 * x
+     | val denomArg = 2 * x
+     | }
+res6: LazyRationalTrait = 1/2
+```
+
+不需要预初始化。跟踪导致上面代码中输出的字符串1/2的初始化序列很有启发意义:
+
+1. 创建一个新的LazyRationalTrait实例，并运行LazyRationalTrait的初始化代码。该初始化代码为空；LazyRationalTrait的字段还没有初始化。
+
+2. 接下来，执行新表达式定义的匿名子类的主构造函数。这涉及到用2初始化numerArg，用4初始化denomArg。
+
+3. 接下来，解释器在构造的对象上调用toString方法，以便输出结果值。
+
+4. 接下来，特质LazyRationalTrait中的toString方法第一次访问numer字段，因此计算它的初始化器。
+
+5. numer的初始化器访问私有字段g，因此接下来对g进行计算。这个计算访问在步骤2中定义的数字和分母。
+
+6. 接下来，toString方法访问denom的值，这会对denom的求值。denom的求值访问的是denomArg和g的值。g字段的初始化器不会被重新求值，因为它已经在步骤5中求值了。
+
+7. 最后，构造并输出结果字符串“1/2”。
+
+注意，在LazyRationalTrait类中，g的定义在文本上出现在numer和denom的定义之后。然而，因为这三个值都是惰性的，所以g在numer和denom的初始化完成之前就被初始化了。
+
+这显示了惰性vals的一个重要属性：`其定义的文本顺序并不重要，因为值是按需初始化的`。因此，lazy vals可以让程序员不必费力地思考如何安排val定义，以确保在需要时定义所有内容。
+
+然而，`只有初始化惰性vals既不产生副作用，也不依赖于它们，则该属性才会生效`。在存在副作用的情况下，初始化顺序影响实际使用。然后就很难跟踪初始化代码的运行顺序，正如前面的示例所演示的那样。所以`lazy vals是对函数对象的理想补充，此处初始化的顺序并不重要，只要最终所有东西都被初始化`。它们不太适合指令式编程。
+
+### 20.6 抽象类型
+
+### 20.7 路径依赖类型
+
+### 20.8 细分类型
+
+### 20.9 枚举
+
+### 20.10 案例：货币
