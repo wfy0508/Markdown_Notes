@@ -521,7 +521,7 @@ object Summer{
 scalac CheckSumAccumulator.scala Summer.scala
 ```
 
-这将编译源文件，但是在编译完成之前可能会有明显的延迟。原因是每次编译器启动时，它都要花时间扫描jar文件的内容，甚至在查看您提交给它的新源文件之前就进行其他初始工作。出于这个原因，Scala发行版还包括一个名为fsc的Scala编译器守护进程(用于快速Scala编译器)。
+这将编译源文件，但是在编译完成之前可能会有明显的延迟。原因是每次编译器启动时，它都要花时间扫描jar文件的内容，甚至在查看提交给它的新源文件之前就进行其他初始工作。出于这个原因，Scala发行版还包括一个名为fsc的Scala编译器守护进程(用于快速Scala编译器)。
 
 ```bash
 fsc ChecksumAccumulator.scala Summer.scala
@@ -751,7 +751,7 @@ println(s"Hello, $name!")
 Hello, reader
 ```
 
-您可以将任何表达式放在经过处理的字符串文字中的美元符号($)之后，Scala将把第一个非标识符字符之前的所有字符解释为表达式
+可以将任何表达式放在经过处理的字符串文字中的美元符号($)之后，Scala将把第一个非标识符字符之前的所有字符解释为表达式
 
 ```scala
 scala> s"The answer is ${6 * 7}."
@@ -1792,7 +1792,7 @@ scala> someNumbers.foreach(println _)
 someNumbers.foreach(x => println(x))
 ```
 
-以这种方式使用下划线时，您是在编写一个部分应用函数。在Scala中，当调用一个函数，传入任何需要的参数时，将该函数应用于传入的参数上。
+以这种方式使用下划线时，是在编写一个部分应用函数。在Scala中，当调用一个函数，传入任何需要的参数时，将该函数应用于传入的参数上。
 
 ```scala
 scala> def sumAbc(a: Int, b: Int, c: Int) = a + b + c
@@ -1817,7 +1817,7 @@ res12: Int = 6
 
 这个apply方法是由编译器根据sumAbc的定义自动生成，然后将3个参数传入sumAbc的参数列表中。这个例子中apply调用了sumAbc(1, 2, 3)，然后返回该函数的返回值，也就是6。
 
-另一种考虑这种表达式的方法是，用下划线来表示整个参数列表，这是一种将def转换为函数值的方法。例如，如果您有一个局部函数，如sum(a: Int, b: Int, c: Int): Int，您可以将它“包装”在一个函数值中，该函数值的apply方法具有相同的参数列表和结果类型。当你把这个函数值应用到一些参数上时，会将sumAbc应用到参数列表中，然后返回函数的返回值。
+另一种考虑这种表达式的方法是，用下划线来表示整个参数列表，这是一种将def转换为函数值的方法。例如，如果有一个局部函数，如sum(a: Int, b: Int, c: Int): Int，可以将它“包装”在一个函数值中，该函数值的apply方法具有相同的参数列表和结果类型。当你把这个函数值应用到一些参数上时，会将sumAbc应用到参数列表中，然后返回函数的返回值。
 
 即使不能将方法或嵌套函数赋给变量，或将其作为参数传递给另一个函数，但如果将方法或嵌套函数包装在函数值中，并在其名称后面加上下划线，则可以实现这些操作。
 
@@ -1943,7 +1943,7 @@ incr9999: Int => Int = $$Lambda$1223/705170339@4893b980
 
 当调用`makeIncreaser(1)`时，将创建并返回一个闭包，该闭包捕获值1作为绑定以获取`more`内容。同理，当调用`makeIncreaser(9999)`时，将创建并返回一个闭包，该闭包捕获值9999作为绑定以获取`more`内容。
 
-当您将这些闭包应用于参数(在本例中，只有一个参数x，必须传入)时，返回的结果取决于创建闭包时如何定义更多的参数:
+当将这些闭包应用于参数(在本例中，只有一个参数x，必须传入)时，返回的结果取决于创建闭包时如何定义更多的参数:
 
 ```scala
 scala> inc1(1)
@@ -2020,7 +2020,7 @@ res3: Float = 10.0
 
 #### 8.8.3 默认参数
 
-Scala允许您为函数参数指定默认值。在函数调用中可以选择省略此类参数的参数，在这种情况下，相应的参数将使用默认值填充。
+Scala允许为函数参数指定默认值。在函数调用中可以选择省略此类参数的参数，在这种情况下，相应的参数将使用默认值填充。
 
 ```scala
 scala> def printTime(out: java.io.PrintStream = Console.out) =
@@ -2114,7 +2114,7 @@ java.lang.Exception: bang!
   ... 28 elided
 ```
 
-这一次，您只看到`bang`的一个堆栈帧。您可能认为`bang`在调用自己之前就崩溃了，但事实并非如此。如果您认为在查看堆栈跟踪时可能会被尾部调用优化弄糊涂，那么您可以通过向`scala shell`或`scalac`编译器提供以下参数来关闭它们。
+这一次，只看到`bang`的一个堆栈帧。可能认为`bang`在调用自己之前就崩溃了，但事实并非如此。如果认为在查看堆栈跟踪时可能会被尾部调用优化弄糊涂，那么可以通过向`scala shell`或`scalac`编译器提供以下参数来关闭它们。
 
 ```bash
 -g:notailcalls
@@ -3817,7 +3817,7 @@ package bobsrockets{
 }
 ```
 
-Scala提供了一个名为`_root_`的包，它位于用户可以编写的任何包之外。换句话说，您可以编写的每个**顶级包**都被视为`_root_`包的成员。例如，上例中的`launch和bobsrockets都是package的成员_root_`。结果是_root_.launch提供了顶级lanuch包和_root_.launch。Booster3指定了最外层的booster类。
+Scala提供了一个名为`_root_`的包，它位于用户可以编写的任何包之外。换句话说，可以编写的每个**顶级包**都被视为`_root_`包的成员。例如，上例中的`launch和bobsrockets都是package的成员_root_`。结果是_root_.launch提供了顶级lanuch包和_root_.launch。Booster3指定了最外层的booster类。
 
 ### 13.3 导入(import)
 
@@ -3920,7 +3920,7 @@ package p{
 
 ### 13.5.3 保护范围
 
-有访问权限的修饰符为您提供了非常细粒度的控制。
+有访问权限的修饰符为提供了非常细粒度的控制。
 
 ```scala
 package bobsrockets
@@ -3984,7 +3984,7 @@ object Rocket{
 
 ### 13.6 包对象
 
-到目前为止，看到添加到包中的代码是类、特质和单例对象。这些是放在包的顶层的最常见的定义。但是Scala并没有限制你只是这样做，在类中的任何类型的定义都可以放在包的顶层。如果有一些帮助器方法，您想要在整个包的范围内，那么就将它放在包的顶层。
+到目前为止，看到添加到包中的代码是类、特质和单例对象。这些是放在包的顶层的最常见的定义。但是Scala并没有限制你只是这样做，在类中的任何类型的定义都可以放在包的顶层。如果有一些帮助器方法，想要在整个包的范围内，那么就将它放在包的顶层。
 
 为了这样做，可以将其放进`包对象(package object)`中，每个包允许有一个包对象。放在包对象中的任何定义都被认为是包本身的成员。
 
@@ -4331,7 +4331,7 @@ E match{
 res3: String = strange math! Pi = 2.718281828459045
 ```
 
-在这里，编译器甚至不允许您添加默认情况。由于pi是一个变量，所以它将匹配所有输入，因此不可能找到它后面的情况（unreachable）。
+在这里，编译器甚至不允许添加默认情况。由于pi是一个变量，所以它将匹配所有输入，因此不可能找到它后面的情况（unreachable）。
 
 对于常量模式，也是可以使用小写：
 
@@ -5519,7 +5519,7 @@ res81: Boolean = false
 
 ### 17.1 序列
 
-序列类型允许您处理按顺序排列的数据组。因为元素是有序的，你可以按下标访问第1个元素，第1个元素，103号元素，以此类推。
+序列类型允许处理按顺序排列的数据组。因为元素是有序的，你可以按下标访问第1个元素，第1个元素，103号元素，以此类推。
 
 #### 17.1.1 列表
 
@@ -5764,7 +5764,7 @@ Map的常用方法：
 
 #### 17.2.4 有序集和映射
 
-有时，您可能需要一个集合或映射，其迭代器以特定顺序返回元素。为此，Scala集合库提供了SortedSet和SortedMap两种特质。
+有时，可能需要一个集合或映射，其迭代器以特定顺序返回元素。为此，Scala集合库提供了SortedSet和SortedMap两种特质。
 
 这些特征是由TreeSet和TreeMap类实现，它们使用红黑树来保持元素(在TreeSet的情况下)或键(在TreeMap的情况下)的顺序。顺序由Ordered特质决定，集合的元素类型或映射的键类型必须混合或隐式转换为该特质。这些类只有不可变变量。
 
@@ -5792,13 +5792,13 @@ res12: scala.collection.immutable.TreeSet[(Int, Char)] = TreeSet((1,x), (2,x), (
 
 ### 17.3 在可变和不可变集合类之间选择
 
-编程中，当抉择不定的时候，优先选择使用不可变集合类，因为这样更容易推断。特别是，如果您发现自己担心在适当的位置创建可变集合的副本，或者经常考虑谁“拥有”或“包含”可变集合，那么请考虑将某些集合切换为其不可变对象。
+编程中，当抉择不定的时候，优先选择使用不可变集合类，因为这样更容易推断。特别是，如果发现自己担心在适当的位置创建可变集合的副本，或者经常考虑谁“拥有”或“包含”可变集合，那么请考虑将某些集合切换为其不可变对象。
 
 除了可能更容易推理之外，如果集合中存储的元素数量很少，那么不可变集合通常可以比可变集合存储得更紧凑。例如，一个空的、默认表示为HashMap的可变映射大约占用80个字节，每增加一个条目，就增加16个字节。一个空的不可变Map，在所有引用之间共享的单一对象，因此对它的引用实际上只需要一个指针字段。
 
 此外，Scala集合库目前在单个对象中存储最多4个条目的不可变映射和集合，这通常占用16到40个字节，具体取决于集合中存储的条目数量。所以对于小型Map和Set，不可变版本比可变版本更紧凑。考虑到许多集合都很小，将它们切换���不可变可以带来重要的空间节省和性能优势。
 
-为了更容易从不可变集合切换到可变集合，反之亦然，Scala提供了一些语法糖。尽管不可变Set和Map不支持真正的`+=`方法，但Scala提供了一种有用的替代解释`+=.`。每当您编写`a += b`，而a不支持名为`+=`的方法时，Scala将尝试将其解释为`a = a + b`。
+为了更容易从不可变集合切换到可变集合，反之亦然，Scala提供了一些语法糖。尽管不可变Set和Map不支持真正的`+=`方法，但Scala提供了一种有用的替代解释`+=.`。每当编写`a += b`，而a不支持名为`+=`的方法时，Scala将尝试将其解释为`a = a + b`。
 
 ```scala
 scala> val people = Set("Nancy", "Jane")
@@ -5880,7 +5880,7 @@ scala> treeSet.toArray
 res25: Array[String] = Array(blue, green, red, yellow)
 ```
 
-但是转换到列表或数组通常需要复制集合的所有元素，因此对于大型集合可能很慢。但是，由于现有的API，有时您需要这样做。由于许多集合无论如何都只有几个元素，在这种情况下，速度损失很小。
+但是转换到列表或数组通常需要复制集合的所有元素，因此对于大型集合可能很慢。但是，由于现有的API，有时需要这样做。由于许多集合无论如何都只有几个元素，在这种情况下，速度损失很小。
 
 #### 17.4.2 在可变与不可变集及映射间转换
 
@@ -5917,7 +5917,7 @@ immu: scala.collection.immutable.Map[String,Int] = Map(ii -> 2, i -> 1)
 
 元组省去了定义简单数据量大的类的繁琐工作。元组节省了为类选择名称、选择定义类的作用域以及为类成员选择名称的工作。
 
-因为元组可以组合不同类型的对象，所以`元组不能被遍历`。如果您想要精确地分组一个整数和一个字符串，那么您需要一个元组，而不是列表或数组。`元组的一个常见应用是从一个方法返回多个值`。例如，下面的方法可以查找集合中最长的单词，并返回其索引：
+因为元组可以组合不同类型的对象，所以`元组不能被遍历`。如果想要精确地分组一个整数和一个字符串，那么需要一个元组，而不是列表或数组。`元组的一个常见应用是从一个方法返回多个值`。例如，下面的方法可以查找集合中最长的单词，并返回其索引：
 
 ```scala
 def longestWord(words: Array[String]) = {
@@ -5945,7 +5945,7 @@ scala> longest._2
 res28: Int = 3
 ```
 
-此外，您可以将元组的每个元素分配给它自己定义的变量：
+此外，可以将元组的每个元素分配给它自己定义的变量：
 
 ```scala
 scala> val (word, idx) = longest
@@ -6492,7 +6492,7 @@ class Queue[+T](
 对于队列，可能没有想到使用一个下界来改进enqueue的实现。在此之前，你可能决定让队列协变，在这种情况下，编译器会指出队列的协变错误。通过增加一个下界来修正方差误差可以使队列更通用，队列作为一个整体也更有用。
 
 > ※※※ 与Java不同的是，Scala选择在`声明点协变`而不是定义在`用户调用点协变`
-。在Java中，定义为用户调用点协变，您需要自己设计一个类。需要使用通配符的将是类的入口，如果使用时遇到错误，后续一些重要的实例方法将不再适用。协变就是一个棘手的问题，用户通常会犯错误，他们会认为通配符和泛型过于复杂。通过`定义端协变`，可以向编译器表达意图，编译器会检查想要可用的方法是否确实可用。
+。在Java中，定义为用户调用点协变，需要自己设计一个类。需要使用通配符的将是类的入口，如果使用时遇到错误，后续一些重要的实例方法将不再适用。协变就是一个棘手的问题，用户通常会犯错误，他们会认为通配符和泛型过于复杂。通过`定义端协变`，可以向编译器表达意图，编译器会检查想要可用的方法是否确实可用。
 
 ### 19.6 逆变
 
@@ -6506,7 +6506,7 @@ trait OutputChannel[-T]{
 
 OutputChannel中的类型参数T定义为逆变。举个例子，AnyRef的output channel是String output channel的子类型，虽然看起来有违直觉，但它确实能讲得通的。OutputChannel[String]仅支持String类型写入操作。写入String类型的操作同样可以应用到OutputChannel[AnyRef]。所以使用OutputChannel[AnyRef]替换OutputChannel[String]是没有什么问题的，但是反过来就不可行，因为OutputChannel[String]不能写入String类型以外的值。
 
-这个推理指向类型系统设计中的一个通用原则：`如果您可以在需要类型U的地方替换类型T的值，那么可以安全地假设类型T是类型U的子类型`，这种原则称为**里氏替换原则**(Liskov Substitution Principle)。
+这个推理指向类型系统设计中的一个通用原则：`如果可以在需要类型U的地方替换类型T的值，那么可以安全地假设类型T是类型U的子类型`，这种原则称为**里氏替换原则**(Liskov Substitution Principle)。
 
 如果T支持与U相同的操作，并且T的所有操作都需要更少而比U提供更多的相关操作。在这种情况下，OutputChannel[AnyRef]可以是OutputChannel[String]的子类型，因为这两个操作支持相同的写操作，并且该操作在OutputChannel[AnyRef]中比在OutputChannel[String]中要求的条件更少。“更少”意味着参数在第一种情况下只需要入参是AnyRef，而后者要求入参是String。
 
@@ -6883,7 +6883,7 @@ java.lang.IllegalArgumentException: requirement failed
   ... 32 elided
 ```
 
-如果您尝试用一些不是简单的文字的分子和分母表达式实例化这个特质，您将得到一个异常。这个示例中的异常被抛出，因为当类RationalTrait初始化时，denomArg的默认值仍然是0，这会导致require调用失败。
+如果尝试用一些不是简单的文字的分子和分母表达式实例化这个特质，将得到一个异常。这个示例中的异常被抛出，因为当类RationalTrait初始化时，denomArg的默认值仍然是0，这会导致require调用失败。
 
 这个示例，展示了类参数和抽象字段的初始化顺序不同。`类参数`在`传递给类构造函数之前就已经被计算`(除非参数是按名称的)。与此不同的是，`子类中的val实现定义只有在超类被初始化之后才计算`。
 
@@ -6937,7 +6937,7 @@ scala> new {
 
 #### 20.5.2 惰性vals
 
-可以使用预先初始化的字段精确地模拟类构造函数参数的初始化行为。但是，有时您可能更愿意让系统自己来确定应该如何初始化。可以通过在`val之前加上lazy标识符`来实现，等式右边的表达式会在第一次引用val变量时计算。
+可以使用预先初始化的字段精确地模拟类构造函数参数的初始化行为。但是，有时可能更愿意让系统自己来确定应该如何初始化。可以通过在`val之前加上lazy标识符`来实现，等式右边的表达式会在第一次引用val变量时计算。
 
 下面举例说明：
 
@@ -7027,10 +7027,230 @@ res6: LazyRationalTrait = 1/2
 
 ### 20.6 抽象类型
 
+在本章的开头，你看到了type T，一个抽象的类型描述。本章的其余部分将讨论这种抽象类型的表述的含义以及它的好处。与所有其他抽象声明一样，抽象类型声明是一个占位符，用于在子类中具体定义的内容。在本例中，type T是一个将在类继承层次结构中进一步定义的类型。因此，上面的T指的是在声明它时还未知的类型。不同的子类可以实现不同的T类型。
+
+下面来举例说明，模拟动物的饮食行为，先定义Food类和Animal类及其方法eat：
+
+```scala
+class Food
+abstract class Animal{
+  def eat(food: Food)
+}
+```
+
+然后再定义Cow和Grass类，然后编写如下代码：
+
+```scala
+class Grass extends Food
+class Cow extends Animal{
+  override def eat(food: Grass) = {}
+}
+```
+
+但在编译时，会抛出一个错误：
+
+```scala
+<console>:14: error: method eat overrides nothing.
+Note: the super classes of class Cow contain the following, non final members named eat:
+def eat(food: Food): Unit
+       override def eat(food: Grass) = {}
+                    ^
+```
+
+Cow类中的eat方法并没有复写Animal中的eat方法，因为两者的eat方法类型不一致。
+
+有些人认为，类型系统在拒绝这些类方面太严格，认为在子类中指定一个参数类型是合理的，但是，如果按编写的方式允许使用这些类，可能很快就会陷入不安全的情况。
+
+```scala
+class Food
+abstract class Animal{
+  def eat(food: Food)
+}
+
+class Grass extends Food
+class Cow extends Animal{
+  override def eat(food: Grass) = {} //不能编译，但如果可以编译的话
+}
+
+class Fish extends Food
+val bessy: Animal = new Cow
+bessy eat (new Fish)
+```
+
+因为定义牛的类(Cow)是Animal的子类，所以Cow中的eat方法会接受Food的子类作为入参，但这样就会出现牛吃鱼的情况，这是不符合常理的。
+
+相反，需要应用一些更精确的建模。动物确实吃食物，但是每种动物(Animal)吃什么食物取决于它们(Animal)的定义，这样可以使用抽象类型巧妙的定义：
+
+```scala
+class Food
+abstract class Animal{
+  type SuitableFood <: Food
+  def eat(food: SuitableFood)
+}
+```
+
+新的定义类型中使用上界，动物只能吃适合吃的东西，所有在子类中具体实现的方法参数SuitableFood都必须是Food的子类。在下面的定义中，Cow在编译时就没什么问题:
+
+```scala
+class Grass extends Food
+class Cow extends Animal{
+  type SuitableFood = Grass
+  override def eat(food: Grass) = {}
+}
+```
+
+然后再定义Fish类，然后将Fish传入Cow的eat方法中：
+
+```scala
+scala> class Fish extends Food
+defined class Fish
+
+scala> val bessy: Animal = new Cow
+bessy: Animal = Cow@36463b09
+
+scala> bessy eat (new Fish)
+<console>:14: error: type mismatch;
+ found   : Fish
+ required: bessy.SuitableFood
+       bessy eat (new Fish)
+                  ^
+```
+
 ### 20.7 路径依赖类型
 
-### 20.8 细分类型
+上节例子最后的错误中显示`bessy.SuitableFood`，其中包含一个对象引用(bessy)，和它的字段SuitableFood。这表明`Scala中的对象可以将类型作为成员`。bessy.SuitableFood是作为bessy引用的对象成员的SuitableFood类型，或者，也可以是适合bessy的food类型。
+
+像bessy.SuitableFood这种类型称为`路径依赖类型`。正如术语“路径依赖类型”所隐含的，`类型依赖于路径`;通常，不同的路径会产生不同的类型。例如，假设像这样定义了类DogFood和Dog:
+
+```scala
+class DogFood extends Food
+class Dog extends Animal{
+  type SuitableFood = DogFood
+  override def eat(food: DogFood) = {}
+}
+```
+
+如果您试图用适合牛的食物喂狗，您的代码将无法编译：
+
+```scala
+scala> val bessy = new Cow
+bessy: Cow = Cow@29892a77
+
+scala> val lassie = new Dog
+lassie: Dog = Dog@40ac0a56
+
+scala> lassie eat (new bessy.SuitableFood)
+<console>:14: error: type mismatch;
+ found   : Grass
+ required: DogFood
+       lassie eat (new bessy.SuitableFood)
+                   ^
+```
+
+如果新定义一个Dog的实例，再做操作，则没有问题：
+
+```scala
+scala> val bootsie = new Dog
+bootsie: Dog = Dog@312819ae
+
+scala> lassie eat (new bootsie.SuitableFood)
+```
+
+Scala的路径依赖类型和Java的内部类类型相似，但不同的是：`路径依赖类型为外部对象命名，而内部类类型为外部类命名`。Java风格的内部类类型也可以用Scala表示，但是它们的编写方式不同。
+
+```scala
+class Outer{
+  class Inner
+}
+```
+
+在Scala中，使用表达式`Outer#inner`来处理内部类，而不是Java的`Outer.inner`。我们先实例化两个Outer类：
+
+```scala
+val o1 = new Outer
+val o2 = new Outer
+```
+
+o1.Inner和o2.Inner是两个不同的路径依赖类型。
+
+与Java一样，在Scala中，内部类实例持有对外部类实例的引用。这允许内部类访问其外部类的成员。因此，如果不以某种方式指定外部类实例，就不能实例化内部类。一种方法是在外部类的主体中实例化内部类。在这种情况下，将使用当前的外部类实例(使用this引用)。
+
+另一种方法是使用路径依赖类型。例如，因为类型为o1.Inner，命名一个特定的外部对象，你可以实例化它:
+
+```scala
+new o1.Inner
+```
+
+内部对象将包含外部对象的引用（从o1引用的对象）。相反，因为类型Outer#Inner没有指明Outer的任何特定实例，所以不能创建它的实例
+
+```scala
+scala> new Outer#Inner
+<console>:13: error: Outer is not a legal prefix for a constructor
+       new Outer#Inner
+                 ^
+```
+
+### 20.8 重定向类型
 
 ### 20.9 枚举
+
+在Scala的枚举支持端口中发现了一个关于路径依赖类型的有趣应用。其他一些语言，包括Java和c#，使用枚举作为内置的语言构造来定义新类型。Scala对枚举不需要特殊的语法。相反，在它的标准库中有一个类`scala.Enumeration`。
+
+要创建新的枚举，需要定义一个扩展该类的对象，如下面的示例所示，该对象定义了Colors的新枚举:
+
+```scala
+object Colors extends scala.Enumeration{
+  val Red = Value
+  val Green = Value
+  val Bule = Value
+}
+```
+
+也可以使用较为简洁的方法：
+
+```scala
+object Colors extends scala.Enumeration{
+  val Red, Green, Bule = Value
+}
+```
+
+使用import导入定义好的类和枚举值：
+
+```scala
+import Color._
+```
+
+枚举定义了一个名为Value的内部类，同名的无参数值方法返回该类的一个新实例。换句话说，一个值，比如Colors.Red是Color.Value的类型。Colors.Value是所有在Colors中定义枚举值的类型。它是一个路径依赖类型，Colors是路径，Value是依赖类型。重要的是，这是一个全新的类型，不同于所有其他类型。
+
+Scala的枚举类还提供了其他语言的枚举设计中可以找到的许多其他特性。通过使用Value方法的另一个重载变体，可以将名称与枚举值关联起来:
+
+```scala
+object Direction extends Enumeration {
+  val North = Value("North")
+  val East = Value("East")
+  val South = Value("South")
+  val West = Value("West")
+}
+
+//可以通过枚举的values方法返回的集合迭代枚举的值:
+scala> for (d <- Direction.values) print(d + " ")
+North East South West
+```
+
+枚举值从0开始编号，通过id方法可以找到枚举值的个数:
+
+```scala
+scala> Direction.North.id
+res15: Int = 0
+```
+
+也可以采用另一种方式，从非负整数到枚举中以该数字作为id的值:
+
+```scala
+scala> Direction(0)
+res16: Direction.Value = North
+```
+
+这里展示了部分枚举类型实现，可以在scala.Enumeration中找到更多的使用方法。
 
 ### 20.10 案例：货币
