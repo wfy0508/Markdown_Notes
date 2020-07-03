@@ -6707,7 +6707,7 @@ scala> val wontCompile = orderedMergeSort(List(3, 2, 1))
 
 ## 20 抽象成员
 
-如果类或特质的成员在类中没有完整的定义，则该成员是抽象的。类中声明的抽象成员在它的子类中具体实现。
+如果类或特质的成员在类中没有完整的定义，则该成员是抽象的。类中声明的抽象成员在它的子类中实现。
 
 在本章中，将描述所有四种抽象成员：vals、var、方法和类型。在此过程中，我们将讨论`预初始化的字段`、`惰性vals`、`路径依赖类型`和`枚举`。
 
@@ -6767,7 +6767,7 @@ def initial: String
 
 从使用方来看，两者的定义没有任何区别。但是，如果initial是一个抽象val，使用方调用`obj.initial`每次都会返回相同的值；而如果initial是一个抽象方法，就未必是这样。作为抽象方法，在子类中实现时，可以在每次调用时都返回不同的值。
 
-换句话说，抽象val的执行规则有限制：`任何实现都必须为一个val的定义，不能使用var或者def`。另一方面，抽象方法声明可以通过具体的方法定义和具体的val定义来实现。下面例子中，抽象类Fruit，子类Apple是合法的，但BadApple则不行：
+换句话说，`抽象val的执行规则`有限制：`任何实现都必须为一个val的定义，不能使用var或者def`。另一方面，抽象方法声明可以通过具体的方法定义和具体的val定义来实现。下面例子中，抽象类Fruit，子类Apple是合法的，但BadApple则不行：
 
 ```scala
 abstract class Fruit{
@@ -6800,7 +6800,7 @@ trait AbstractTime{
 }
 ```
 
-声明为类成员的vars自动定义了getter和setter方法，与下面定义一致：
+声明为类成员的vars，编译器自动定义了getter和setter方法，与下面定义一致：
 
 ```scala
 trait AbstractTime{
@@ -6815,7 +6815,7 @@ trait AbstractTime{
 
 抽象的vals有时起到类似于超类参数的作用：`允许在子类中实现父类缺少的详细信息`。这对于特质来说特别重要，`因为特质没有可以传递参数的构造函数`。因此，参数化特征的通常概念是通过抽象vals，在子类中实现的。
 
-现在重构在第6章中实现的Rational：
+现在重写在第6章中实现的Rational：
 
 ```scala
 trait RationalTrait{
@@ -6852,7 +6852,7 @@ new RationalTrait{
 }
 ```
 
-表达式、expr1和expr2作为匿名类初始化的一部分进行计算，但是匿名类在初始化RationalTrait之后进行初始化。因此，在RationalTrait的初始化过程中，numerArg和denomArg的值是不可用的(更精确的来说，使用任何一个值都会返回一个默认Int类型的值0)。对于前面RationalTrait的代码定义，这并不是一个问题，因为特质的初始化不会用到numerArg和denomArg的值。
+表达式、expr1和expr2作为匿名类初始化的一部分进行计算，但是匿名类在初始化RationalTrait之后进行初始化。因此，在`RationalTrait的初始化过程中，numerArg和denomArg的值是不可用的`(更精确的来说，使用任何一个值都会返回一个默认Int类型的0)。对于前面RationalTrait的代码定义，这并不是一个问题，因为特质的初始化不会用到numerArg和denomArg的值。
 
 但是对于下面的例子来说，就会有问题：
 
@@ -6883,7 +6883,7 @@ java.lang.IllegalArgumentException: requirement failed
   ... 32 elided
 ```
 
-如果尝试用一些不是简单的文字的分子和分母表达式实例化这个特质，将得到一个异常。这个示例中的异常被抛出，因为当类RationalTrait初始化时，denomArg的默认值仍然是0，这会导致require调用失败。
+如果尝试用一些不是简单的文字的分子和分母表达式实例化这个特质，将得到一个异常。这个示例中编译器会抛出异常，因为当类RationalTrait初始化时，denomArg的默认值仍然是0，这会导致require调用失败。
 
 这个示例，展示了类参数和抽象字段的初始化顺序不同。`类参数`在`传递给类构造函数之前就已经被计算`(除非参数是按名称的)。与此不同的是，`子类中的val实现定义只有在超类被初始化之后才计算`。
 
@@ -7007,15 +7007,15 @@ res6: LazyRationalTrait = 1/2
 
 1. 创建一个新的LazyRationalTrait实例，并运行LazyRationalTrait的初始化代码。该初始化代码为空；LazyRationalTrait的字段还没有初始化。
 
-2. 接下来，执行新表达式定义的匿名子类的主构造函数。这涉及到用2初始化numerArg，用4初始化denomArg。
+2. 执行新表达式定义的匿名子类的主构造函数。这涉及到用2初始化numerArg，用4初始化denomArg。
 
-3. 接下来，解释器在构造的对象上调用toString方法，以便输出结果值。
+3. 解释器在构造的对象上调用toString方法，以便输出结果值。
 
-4. 接下来，特质LazyRationalTrait中的toString方法第一次访问numer字段，因此计算它的初始化器。
+4. 特质LazyRationalTrait中的toString方法第一次访问numer字段，因此计算它的初始化器。
 
 5. numer的初始化器访问私有字段g，因此接下来对g进行计算。这个计算访问在步骤2中定义的数字和分母。
 
-6. 接下来，toString方法访问denom的值，这会对denom的求值。denom的求值访问的是denomArg和g的值。g字段的初始化器不会被重新求值，因为它已经在步骤5中求值了。
+6. toString方法访问denom的值，这会对denom的求值。denom的求值访问的是denomArg和g的值。g字段的初始化器不会被重新求值，因为它已经在步骤5中求值了。
 
 7. 最后，构造并输出结果字符串“1/2”。
 
@@ -7108,7 +7108,7 @@ defined class Fish
 scala> val bessy: Animal = new Cow
 bessy: Animal = Cow@36463b09
 
-scala> bessy eat (new Fish)
+scala> bessy eat (new Fish) //由于Cow中的SuittableFood已经定义为Grass，所以不能传入Grass意外的食物
 <console>:14: error: type mismatch;
  found   : Fish
  required: bessy.SuitableFood
@@ -7130,7 +7130,7 @@ class Dog extends Animal{
 }
 ```
 
-如果您试图用适合牛的食物喂狗，您的代码将无法编译：
+如果试图用适合牛的食物喂狗，的代码将无法编译：
 
 ```scala
 scala> val bessy = new Cow
@@ -7254,3 +7254,284 @@ res16: Direction.Value = North
 这里展示了部分枚举类型实现，可以在scala.Enumeration中找到更多的使用方法。
 
 ### 20.10 案例：货币
+
+本章的剩余部分将通过案例研究来解释如何在Scala中使用抽象类型。这里定义一个货币类`Currency`，一个典型的货币类表示以美元、欧元、日元或其他货币表示的金额。还会通过一些算法来计算两种货币通过汇率互相转换。
+
+```scala
+abstract class Currency{
+  val amount: Long //货币的金额
+  def designation: String //货币符号 USD Yen...
+  override def toString = amount + " " + designation
+  def + (that: Currency): Currency = ...
+  def * (x: Double): Currency = ...
+}
+```
+
+可以通过提供具体的数量和指定值来创建具体的货币值:
+
+```scala
+new Currency{
+  val amount = 79L
+  def designation = "USD"
+}
+```
+
+如果我们想要建模的只是单一货币，比如美元或欧元，那么这个设计是可行的。但如果我们需要处理几种货币，它就会失败。假设将美元和欧元建模为类Currency的两个子类:
+
+```scala
+abstract class Dollar extends Currency{
+  def designation = "USD"
+}
+
+abstract class Euro extends Currency{
+  def designation = "Euro"
+}
+```
+
+这样看起来可行，但是这样会允许美元和欧元直接相加，这是不符合常理的。相反，需要将+方法定义为通用的版本。当实现Dollar类时，它应该接收Dollar类型的数据并且交出Dollar类型的结果，作用于Euro时同样如此。所以+方法的类型依赖于所在的类，尽管如此，希望只编写一次加法方法，而不是每次定义新货币时都编写。
+
+在Scala中，有一种简单的技术可以处理这样的情况。如果在定义类时有些东西还不知道具体怎么来实现，那么将其抽象到类中。这种方法适用于值和类型。对于Currency，+方法的确切参数和结果类型是未知的，将其定义为抽象类型是个很好的选择。
+
+```scala
+abstract class AbstractCurrency{
+  type Currency <: AbstractCurrency //定义了一个抽象类型
+  val amount: Long
+  def designation: String
+  override def toString = amount + " " + designation
+  def + (that: Currency): Currency = ...
+  def * (x: Double): Currency = ...
+}
+```
+
+然后再定义新的Dollar类：
+
+```scala
+abstract class Dollar extends AbstractCurrency{
+  type Currency = Dollor
+  def designation = "USD"
+}
+```
+
+这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现这两个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
+
+```scala
+def +(that: Currency): Currency = new Currency{
+  val amount = that.amount + this.amount
+}
+```
+
+但是这样并不能编译：
+
+```scala
+error: class type required
+def + (that: Currency): Currency = new Currency {
+                                       ˆ
+```
+
+Scala处理抽象类型的一个限制是，`既不能创建抽象类型的实例，也不能将抽象类型作为另一个类的超类型`。因此，编译器会拒绝试图实例化抽象类型Currency的代码。
+
+但是，可以使用工厂方法解决此限制。不是直接创建抽象类型的实例，而是声明一个执行该操作的抽象方法。然后，当抽象类型被固定为某种具体类型时，还需要给出工厂方法的具体实现。对于类AbstractCurrency，如下所示：
+
+```scala
+abstract class AbstractCurrency{
+  type Currency <: AbstractCurrency //抽象类型
+  def make(amount: Long): Currency //工厂方法
+  ...
+}
+```
+
+这样的设计是可行的，但它看起来很可疑。为什么要把工厂方法放在类AbstractCurrency中？这看起来可疑，至少有两个原因。首先，如果你有一定数量的货币(比如，1美元)，你还拥有制造更多相同货币的能力，像这样：
+
+```scala
+myDollar.make(100) //违法行为
+```
+
+这段代码的第二个问题是，如果已经有了对Currency对象的引用，则可以创建更多Currency对象。但是，如何获得给定Currency的第一个对象呢？需要另一个创建方法，它的工作与make基本相同。
+
+当然，解决方案是将抽象类型和工厂方法移到类AbstractCurrency之外。需要创建另一个包含AbstractCurrency类、Currency类型和工厂方法make。这个类名为CurrencyZone:
+
+```scala
+abstract class CurrencZone{
+  type Currency <: AbstractCurrency
+  def make(x: Long): Currency
+  abstract class AbstractCurrency{
+    val amount: Long
+    def designation: String
+    override def toString = amount + " " + designation
+    def + (that: Currency): Currency = make(this.amount + that.amount)
+    def * (x: Double): Currency = make((this.amount * x).toLong)
+  }
+}
+```
+
+一个具体的例子是US，可以定义为:
+
+```scala
+object US extends CurrencyZone{
+  abstract class Dollar extends AbstractCurrency{
+    def designation = "USD"
+  }
+  type Currency = Dollar
+  def make(x: Long) = new Dollar{val amount = x}
+}
+```
+
+在US中money的类型为US.Dollar，US对象还将类型Currency固定为Dollar的别名，它给出了一个make工厂方法的实现，以返回美元数量。
+
+到目前为止，每一种货币都以单一的单位计量：美元、欧元或日元。但是大多数货币都有子类，比如美分(cents)。最直接的方式在US中定义美分字段。这个字段代表美分而不是美元。要把它转换回美元，在类CurrencyZone中引入一个字段CurrencyUnit是很有用的，它包含了该货币的一个标准单位的金额:
+
+```scala
+class CurrencyZone{
+  ...
+  val CurrencyUint: Currency
+}
+```
+
+可以定义完整的US类：
+
+```scala
+object US extends CurrencyZone{
+  abstract class Dollar extends AbstractCurrency{
+    def designation = "USD"
+  }
+  type Currency = Dollar
+  def make(cents: Long) = new Dollar{
+    val amount = cents
+  }
+  val Cents = make(1)
+  val Dollar = make(100)
+  val CurrencyUnit = Dollar
+}
+```
+
+和前面定义的US类似，另外增加了三个字段Cents, Dollar和CurrencyUnit。字段Cents表示1 US.Currency，相当于一美分的硬币之类的。字段Dollar表示100 US.Currency。
+
+- `type Dollar`(由名为Dollar的抽象内部类定义)表示在对象US中Currency的通用名称；
+- `val Dollar`是US中定义个一个val变量，与类型Dollar是不同的；
+- `CurrencyUnit`就是US中标准货币单位，就是`val Dollar`，而不是`type Dollar`。
+
+Currency类中的toString方法也需要调整以考虑子类，如美分。例如，10美元23美分的总和应该打印成一个小数：`10.23 USD`。为此，可以实现toString方法，如下所示：
+
+```scala
+override def toString =
+  ((amount.toDouble / CurrencyUnit.amount.toDouble)
+   formatted ("%." + decimals(CurrencyUnit.amount) + "f")
+   + " " + designation)
+```
+
+formatted方法返回格式化原始字符串后产生的字符串，该字符串是根据作为格式化方法的右操作数传递的格式化字符串调用的，与Java的String.format的方法一样。在toString中使用的格式化字符串是对CurrencyUnit.amount调用decimals方法，返回一个数值的十进制位数减1，decimals(10)就返回1，decimals(100)就返回2，以此类推。decimals的定义如下：
+
+```scala
+private def decimal(n: Long): Int = {
+  if (n == 1) 0 else 1 + decimals(n / 100)
+}
+```
+
+下面定义了其他币种：
+
+```scala
+object Europe extends CurrencyZone{
+  abstract class Euro extends AbstractCurrency{
+    def designation = "EUR"
+  }
+  type Currency = Euro
+  def make(cents: Long) = new Euro{
+    val amount = cents
+  }
+  val Cent = make(1)
+  val Euro = make(100)
+  val CurrencyUnit = Euro
+}
+
+object Japan extends CurrencyZone{
+  abstract class Yen extends AbstractCurrency{
+    def designation = "JPY"
+  }
+  type Currency = Yen
+  def make(yen: Long) = new Yen{
+    val amount = yen
+  }
+  val Yen = make(1)
+  val CurrencyUnit = Yen
+}
+```
+
+要实现货币转换，首先编写转换器Converter：
+
+```scala
+object Converter {
+  var exchangeRate = Map(
+    "USD" -> Map("USD" -> 1.0, "EUR" -> 0.7596,
+                 "JPY" -> 1.211, "CHF" -> 1.223),
+    "EUR" -> Map("USD" -> 1.316, "EUR" -> 1.0,
+                 "JPY" -> 1.594, "CHF" -> 1.623),
+    "JPY" -> Map("USD" -> 0.8257, "EUR" -> 0.6272,
+                 "JPY" -> 1.0, "CHF" -> 1.018),
+    "CHF" -> Map("USD" -> 0.8108, "EUR" -> 0.6160,
+                 "JPY" -> 0.982, "CHF" -> 1.0 )
+  )
+}
+```
+
+然后，可以为Currency添加一个转换方法from，该方法将给定的源货币转换为当前的Currency对象：
+
+```scala
+def from(other: CurrencyZone#AbstractCurrency): Currency = {
+  make(math.round(other.amount.toDouble * Converter.exchangeRate(other.designation)(this.designation)))
+}
+```
+
+from方法可以输入任意的货币，这是通过它的形参类型来表示的，`CurrencyZone#AbstractCurrency`，这表明输入的参数other必须是某个任意未知CurrencyZone的AbstractCurrency类型。
+
+最终CurrencyZone的定义为：
+
+```scala
+abstract class CurrencyZone{
+  type Currency <: AbstractCurrency
+  def make(x: Long): Currency
+
+  abstract class AbstractCurrency{
+    val amount: Long
+    def designation: String
+    def + (that: Currency): Currency = make(this.amount + that.amount)
+    def * (x: Double): Currency = make((this.amount * x).toLong)
+    def - (that: Currency): Currency = make(this.amount - that.amount)
+    def / (that: Double) = make((this.amount / that).toLong)
+    def / (that: Currency) = this.amount.toDouble / that.amount
+    def from (other: CurrencyZone#AbstractCurrency): Currency = {
+      make(math.round(other.amount.toDouble * Converter.exchangeRate(other.designation)(this.designation)))
+    }
+    private def decimals(n: Long): Int = {
+      if (n == 1) 0 else decimals(n / 10) + 1
+    }
+    override def toString = {
+      ((amount.toDouble / CurrencyUnit.amount.toDouble) formatted ("%." + decimals(CurrencyUnit.amount) + "f") + " " + designation)
+    }
+  }
+  val CurrencyUnit: Currency
+}
+```
+
+测试如下：
+
+```scala
+scala> Japan.Yen from US.Dollar * 100
+res3: Japan.Currency = 12110 JPY
+
+scala> Europe.Euro from res3
+res4: Europe.Currency = 75.95 EUR
+
+scala> US.Dollar from res4
+res5: US.Currency = 99.95 USD
+
+scala> US.Dollar * 100 + res5
+res6: US.Currency = 199.95 USD
+
+scala> US.Dollar + Europe.Euro
+<console>:14: error: type mismatch;
+ found   : Europe.Euro
+ required: US.Currency
+    (which expands to)  US.Dollar
+       US.Dollar + Europe.Euro
+                          ^
+```
