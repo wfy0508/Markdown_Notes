@@ -7683,18 +7683,468 @@ Scala总共有三个地方会用到隐式转换：
 
 ### 21.3 隐式转换到一个预期的类型
 
+转换到预期的类型，就是每当编译器看见一个X而它需要一个Y的时候，他就会查找一个能将X转换为Y的隐式转换。通常一个浮点型不能被用作整数，因为这样会丢失精度：
+
+```scala
+scala> val i: Int = 3.5
+<console>:11: error: type mismatch;
+ found   : Double(3.5)
+ required: Int
+       val i: Int = 3.5
+                    ^
+```
+
+但是定义一个隐式转换就可以，但是会抛出一个告警：
+
+```scala
+scala> implicit def doubleToInt(x: Double) = x.toInt
+<console>:11: warning: implicit conversion method doubleToInt should be enabled by making the implicit value scala.language.implicitConversions visible.
+This can be achieved by adding the import clause 'import scala.language.implicitConversions' or by setting the compiler option -language: implicitConversions.
+See the Scaladoc for value scala.language.implicitConversions for a discussion
+why the feature should be explicitly enabled.
+       implicit def doubleToInt(x: Double) = x.toInt
+                    ^
+doubleToInt: (x: Double)Int
+
+scala> val i: Int = 3.5
+i: Int = 3
+```
+
+代码在幕后变成了：
+
+```scala
+val i: Int = doubleToInt(3.5)
+```
+
+这是一个隐式转换，因为你并没有显式地要求这样一个转换，而是通过将doubleToInt作为单个标识符纳入到当前作用域来，并它标记为可用的隐式转换，这样编译器就会在需要将Double转换成Int自动使用它。
+
+由Double转为Int这其实不符合常理，因为会丢失精度。但是Scala中的scala.Predef这个每个Scala程序都隐式引入的对象定义了那些从“更小”的数值类型向“更大”的数值类型的隐式转换，比如在Predef中可以找到这样的定义：
+
+```scala
+implicit def int2double(x: Int): Double = x.Double
+```
+
+这就是为什么Scala的Int值可以保存到类型为Double的变量中。类型系统当中并没有特殊的规则，这只不过是一个被（编译器）应用的隐式转换而已。
+
 ### 21.4 转换接收端
+
+隐式转换还能应用于方法调用的接收端，也就是被调用的那个对象。这种隐式转换有两个主要用途。首先，接收端转换允许我们更平滑将心累集成到已有的类继承关系图谱中，其次它们支持在语言中编写（原生的）领域特定语言（DSL）。
+
+如果我们写下obj.doIt，但是obj并没有doIt成员，编译器会在放弃之前尝试插入转换。这个转换需要应用到接收端，也就是obj，编译器会装作obj的预期“类型”为拥有名为doIt的成员，这个拥有名为doIt的成员类型并不是一个普通的Scala类型，从概念上讲它是不存在的，这就是为什么编译器选择在这种情况下插入一个隐式转换。
 
 #### 21.4.1 与新类型互操作
 
+接收端转换的一个主要用途就是让心类型和已有类型的继承更加顺滑。尤其是这些转换使得我们可以让使用方程序员像使用新类型那样使用已有的类型，以Rational为例：
+
+```scala
+class Rational(n: Int, d: Int){
+  def + (that: Rational): Rational = ...
+  def + (that: Int): Rational = ...
+}
+```
+
+可以实现的操作有两个有理数加法，或者一个有理数和一个整数相加：
+
+```scala
+val oneHalf = new Rational(1, 2)
+
+oneHalf + oneHalf
+oneHalf + 1
+```
+
+其中并没定义像实现`1 + oneHalf`这样的方法。为了实现这样的操作，需要定义一个从Int到Rational的隐式转换：
+
+```scala
+implicit def intToRational(x: Int) = new Rational(x, 2)
+```
+
+这样就可以实现`1 + oneHalf`的操作，在实现时，编译器会交出如下代码：
+
+```scala
+intToRational(1) + oneHalf
+```
+
 #### 21.4.2 模拟新的语法
+
+隐式转换的另一个用途是模拟新的语法，比如我们之前定义了一个Map：
+
+```scala
+Map(1 -> "One", 2 -> "Two", 3 -> "Three")
+```
+
+有没有想过Scala是如何实现`->`操作的，这并不是语法特性！`->`是ArrowAssoc类的方法，ArrowAssoc是一个定义在scala.Predef对象这一个Scala标准前导代码(preamble)中的类，当你卸下`1 -> "One"`时，编译器会插入一个从1到ArrowAssoc的转换，以便`->`能被找到：
+
+```scala
+package scala
+object Predef{
+  class ArrowAssoc[A](x: A){
+    def -> [B](y: B): Tuple2[A, B] = Tuple2(x, y)
+  }
+  implicit def any2ArrowAssoc[A](x: A): ArrowAssoc[A] = {
+    new ArrowAssoc(x)
+  }
+}
+```
+
+这个“富包装类”模式再给变成怨言提供类语法(syntax-like)的扩展的类库中十分常见。只要你看见有人调用了接收类中不存在的方法，那么很可能使用了隐式转换。
 
 #### 21.4.3 隐式类
 
+Scala 2.10引入了隐式类来建华富包装类的编写。隐式类以implicit开头，对于这样的类，编译器会生成一个从类的构造方法参数到类本身的隐式转换。如果打算用这个类来实现富包装类模式，这个转换真是你想要的。
+
+如果有一个名为Rectangle的类用来表示屏幕上一个长方形的宽和高：
+
+```scala
+case class Rectangle(width: Int, height: Int)
+```
+
+用富包装类来简化工作：
+
+```scala
+implicit class RectangleMaker(width: Int){
+  def x(height: Int) = Rectangle(width, height)
+}
+```
+
+会伴随上述代码自动生成：
+
+```scala
+implicit def Rectangle(width: Int) = {
+  new RectangleMaker(width)
+}
+```
+
+当使用`x`来创建点时：
+
+```scala
+scala> val myRectangle = 3 x 4
+myRectangle: Rectangle = Rectangle(3,4)
+```
+
+因为Int类型并没有名为`x`的方法，编译器会查找一个从Int到某个有这个方法的类型的隐式转换。它将找到自动生成的这个RectangleMaker的转换。
+
+注意：`implicit不能用在样例类(case class)上，并且其构造方法必须有且仅有一个参数`。不仅如此，隐式类必须存在与另一个对象、类和特质里。在实际应用中，只要是隐式类作为富包装类来给某个已有的类添加方法，这些限制应该都不是问题。
+
 ### 21.5 隐式参数
+
+编译器有时将someCall(a)替换为someCall(a)(b)，或者将new Some(a)替换为new Some(a)(b)，通过追加一个参数列表的方式来完成某个函数调用。隐式参数提供的是整个最后一组柯里化的参数列表，而不仅仅是最后一个参数。如果someCall缺失的最后一个参数列表接收三个参数，那么编译器会将someCall(a)替换成someCall(a)(b, c, d)，就这个用法而言，b,c,d三个参数还必须定义为implicit。
+
+假如有一个PreferredPrompt类，封装了一个用户偏好的命令行提示字符串($或者>)：
+
+```scala
+class PreferredPrompt(val preference: String)
+```
+
+同时，假如有一个带有greet的Greeter对象，greet接收两个参数列表，第一个参数列表接收一个字符创作为用户名，而第二个参数列表接收一个PreferredPrompt：
+
+```scala
+object Greeter{
+  def greet(name: String)(implicit prompt: PreferredPrompt) = {
+    println("Welcome, " + name + ". The system is ready.")
+    println(prompt.preference)
+  }
+}
+```
+
+显式的给出prompt：
+
+```scala
+scala> val bobsPrompt = new PreferredPrompt("relax> ")
+bobsPrompt: PreferredPrompt = PreferredPrompt@8ce3f27
+
+scala> Greeter.greet("Bob")(bobsPrompt)
+Welcome, Bob. The system is ready.
+relax>
+```
+
+要让编译器帮你填充prompt，必须首先定义这样一个符合预期类型的变量：
+
+```scala
+object JoesPrefs{
+  implicit val prompt = new PreferredPrompt("Yes, master> ")
+}
+```
+
+然后直接使用，发现编译器会抛出一个错误：
+
+```scala
+scala> Greeter.greet("Joe")
+<console>:15: error: could not find implicit value for parameter prompt: PreferredPrompt
+       Greeter.greet("Joe")
+                    ^
+```
+
+需要先将它带到作用域内：
+
+```scala
+scala> import JoesPrefs._
+import JoesPrefs._
+
+scala> Greeter.greet("Joe")
+Welcome, Joe. The system is ready.
+Yes, master>
+```
+
+注意：`implicit关键字是应用到整个参数列表，而不是单个参数的`。例如：
+
+```scala
+class PreferredPrompt(val preference: String)
+class PreferredDrink(val preference: String)
+
+object Greeter{
+  def greet(name: String)(implicit prompt: PreferredPrompt, drink: PreferredDrink) = {
+    println("Welcome, " + name + ". The system is ready.")
+    println("But while you work, ")
+    println("why not enjoy a cup of " + drink.preference + "?")
+    println(prompt.preference)
+  }
+}
+
+object JoesPrefs{
+  implicit val prompt = new PreferredPrompt("Yes, master> ")
+  implicit val drink = new PreferredDrink("tea")
+}
+```
+
+定义完之后如果不引入，同样不能使用：
+
+```scala
+scala> Greeter.greet("Joe")
+<console>:19: error: could not find implicit value for parameter prompt: PreferredPrompt
+       Greeter.greet("Joe")
+                    ^
+
+scala> import JoesPrefs._
+import JoesPrefs._
+```
+
+引入后，可以显式给出隐式参数，也可以省略：
+
+```scala
+scala> Greeter.greet("Joe")
+Welcome, Joe. The system is ready.
+But while you work,
+why not enjoy a cup of tea?
+Yes, master>
+
+scala> Greeter.greet("Joe")(prompt, drink)
+Welcome, Joe. The system is ready.
+But while you work,
+why not enjoy a cup of tea?
+Yes, master>
+```
+
+例子中的关键点在于：我们并没有用String作为prompt和drink的类型，尽管它们最终都是通过preference字段提供了这样的String。由于编译器在选择隐式参数时是通过作用域内的值的类型做参数类型匹配，隐式参数通常都采用那些“足够”、“稀有”或者“特别“的类型，当值以外的匹配。
+
+关于隐式参数的问题是，它们可能最常使用的场景是提供关于`更靠前`的参数列表中已经“显式”地提到的类型的信息。
+
+看下面一个例子：
+
+```scala
+def maxListOrdering[T](elements: List[T])(ordering: Ordering[T]): T = elements match{
+  case List() => throw new IllegalArgumentException("empty list!")
+  case List(x) => x
+  case x :: rest =>
+    val maxRest = maxListOrdering(rest)(ordering)
+    if (ordering.gt(x, maxRest)) x else maxRest
+}
+```
+
+maxListOrdering除了接收一个List[T]作为入参，还接收一个额外的类型为Ordering[T]的入参，这个额外的参数是给出在比较T类型元素是应该使用的顺序。
+
+这个定义更加通用，但是也比较麻烦，现在调用者必须显式地给出排序，哪怕是当T为Int或者String这样有明确的默认排序的时候。为了让新的方法哼方便使用，可以将第二个参数标记为隐式：
+
+```scala
+def maxListImpParm[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
+  case List() => throw new IllegalArgumentException("empty list!")
+  case List(x) => x
+  case x :: rest =>
+    val maxRest = maxListImpParm(rest)(ordering)
+    if (ordering.gt(x, maxRest)) x else maxRest
+}
+```
+
+maxListImpParm函数是一个隐式参数用来提供关于在更靠前的参数列表中已经显式提到的类型的更多信息的例子。确切地说，类型为Ordering[T]的隐式参数ordering提供了更多关于类型T的信息。类型T在elements参数的类型List[T]中提到过，这是一个更靠前的参数列表中的参数。由于在任何maxListImpParm调用中elements都必须显式地给出，编译器在编译时就知道T是什么，因此就可以确定类型为Ordering[T]的隐式定义是否可用。
+
+实际使用如下：
+
+```scala
+scala> maxListImpParm(List(1, 5, 10, 3))
+res6: Int = 10
+
+scala> maxListImpParm(List(1.5, 5.2, 10.7, 3.1415))
+res7: Double = 10.7
+
+scala> maxListImpParm(List("One", "Two", "Three"))
+res8: String = Two
+```
+
+#### 21.5.1 隐式参数的代码风格规则
+
+从代码风格而言，`最好是对隐式参数使用定制名称的类型`。如前面的ptompt和drink用的并不是String，而分别是PreferredPrompt和PreferredDrink。在此maxListImpParm函数也可以用下面的类型签名来写：
+
+```scala
+def maxListPoorStyle[T](elements: List[T])(implicit orderer: (T, T) => Boolean): T
+```
+
+不过对于使用方而言，这个版本的函数需要提供类型为(T, T) => Boolean的参数orderer，这是一个相当泛化的类型。涵盖了所有从两个T到Boolean的函数。
 
 ### 21.6 上下文界定
 
+使用implicit时，编译器不仅会尝试给这个参数`提供`一个隐式值，还会吧这个参数当做一个可以在方法体中`使用`的隐式定义！也就是说，可以省去方法体中对ordering的第一次使用。
+
+```scala
+def maxList[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
+  case List() => throw new IllegalArgumentException("empty list!")
+  case List(x) => x
+  case x :: rest =>
+    val maxRest = maxList(rest) //这里会自动添加(ordering)
+    if (ordering.gt(x, maxRest)) x else maxRest //依然显式给出ordering
+}
+```
+
+还有一种方法可以去掉对ordering的第二次使用，者设计标准库中定义的如下方法：
+
+```scala
+def implicitly[T](implicit t: T) = t
+```
+
+调用implicitly[Foo]的作用是编译器查找一个类型为Foo的隐式定义，然后会用这个对象来调用implicitly方法。这个方法再将这个对象返回。这样就可以在想要当前作用域找到类型为Foo的隐式对象时直接写implicitly[Foo]。下面展示了implicitly[Ordering[T]]来通过其类型获取ordering参数的用法。
+
+```scala
+def maxList[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
+  case List() => throw new IllegalArgumentException("empty list!")
+  case List(x) => x
+  case x :: rest =>
+    val maxRest = maxList(rest)
+    if (implicitly[Ordering[T]].gt(x, maxRest)) x else maxRest
+}
+```
+
+通过这个定义，参数列表中的ordering可以换成其他名字。
+
+由于这个模式很常用，Scala允许我们省掉这个参数的名称并使用`上下文界定(context bound)`来缩短方法签名。通过上下文界定，`[T: Ordering]`这样的语法是一个上下文界定，它做了两件事：首先，`像平常一样引入类型参数T`；其次，`它添加了类型为Ordering[T]的隐式参数`。
+
+```scala
+def maxList[T: Ordering[T]](elements: List[T]): T = elements match{
+  case List() => throw new IllegalArgumentException("empty list!")
+  case List(x) => x
+  case x :: rest =>
+    val maxRest = maxList(rest)
+    if (implicitly[Ordering[T]].gt(x, maxRest)) x 
+    else maxRest
+}
+```
+
+如果写下`[T <: Ordering[T]]`，实际上说T是一个Ordering[T]，相对而言，如果写的是`[T: Ordering]`，那么并没有说T是什么，而是说T带有某种形式的排序，从这个角度出发，上下文界定很有用。它允许我们的代码“要求”某个类型支持排序，但并不要哪个类型的定义。
+
 ### 21.7 当有多个转换可选时
 
+当当前作用域中有多个隐式转换满足要求，大部分场合编译器都会拒绝插入转换。隐式转换在这个转换显而易见且纯粹是样板代码的时候最好用。如果有多个隐式转换可选，选哪一个就不那么明显。
+
+这里一个简单的例子：
+
+```scala
+scala> def printLength(seq: Seq[Int]) = println(seq.length)
+printLength: (seq: Seq[Int])Unit
+
+scala> implicit def intToRange(i: Int) = 1 to i
+intToRange: (i: Int)scala.collection.immutable.Range.Inclusive
+
+scala> implicit def intToDigits(i: Int) = i.toString.toList.map(_.toInt)
+intToDigits: (i: Int)List[Int]
+
+scala> printLength(12)
+<console>:25: error: type mismatch;
+ found   : Int(12)
+ required: Seq[Int]
+Note that implicit conversions are not applicable because they are ambiguous:
+ both method intToRange of type (i: Int)scala.collection.immutable.Range.Inclusive
+ and method intToDigits of type (i: Int)List[Int]
+ are possible conversion functions from Int(12) to Seq[Int]
+       printLength(12)
+                   ^
+```
+
+这里有两个隐式转换，编译器拒绝插入转换。
+
+Scala 2.8以后规定，如果可用的转换当中有某个转换严格来说比其他更具体，那么编译器就会选择哪个更具体的转换。比如一个接收String，另外一个接收Any，由于String是Any的子类，且比Any更具体，编译器会选择String的版本。
+
+更确切地说，当满足下面任意一条时，就说一条比另一条具体：
+
+- 前者的入参类型是后者入参类型的子类型；
+- 两者都是方法，而前者所在的类扩展自后者所在的类。
+
 ### 21.8 调试
+
+隐式定义是Scala的一项很强大的功能，不过有时也很难做对，这里有些小技巧。
+
+有时会好奇为什么编译器没有找到你认为应该可以使用的隐式转换。这是将转换显式地写出来有助于解决问题。如果显式地写出来还是报错，你就知道为什么编译器不能应用你想要的隐式转换。
+
+举例来说，假如你错误地将wrapString当做一个从String到Lists而不是IndexedSeq，你就会奇怪为什么如下代码不能工作：
+
+```scala
+scala> val chars: List[Char] = "xyz"
+<console>:23: error: type mismatch;
+ found   : String("xyz")
+ required: List[Char]
+       val chars: List[Char] = "xyz"
+                               ^
+```
+
+这时，将wrapString显式地写出来有助于搞清楚是哪里错了：
+
+```scala
+scala> val chars: List[Char] = wrapString("xyz")
+<console>:23: error: type mismatch;
+ found   : scala.collection.immutable.WrappedString
+ required: List[Char]
+       val chars: List[Char] = wrapString("xyz")
+                                         ^
+```
+
+当你调试一个程序是，看到编译器插入的隐式转换有时会有帮助，可以用`-Xprint:typer`这个编译器选项。如果你用这个选项运行scalac，编译器会告诉你类型检查其添加了所有隐式转换后你的代码是什么样子。
+
+```scala
+object Mocha extends App{
+  class PreferredDrink(val preference: String)
+  implicit val perf = new PreferredDrink("mocha")
+  def enjoy(name: String)(implicit drink: PreferredDrink) = {
+    print("Welcome, " + name)
+    print(". Enjoy a ")
+    print(drink.preference)
+    println("!")
+  }
+  enjoy("reader")
+}
+
+使用`scalac -Xprint:typer mocha.scala`命令后，返回：
+
+```scala
+[[syntax trees at end of typer]] // mocha.scala
+package <empty> {
+  object Mocha extends AnyRef with App {
+    def <init>(): Mocha.type = {
+      Mocha.super.<init>();
+      ()
+    };
+    class PreferredDrink extends scala.AnyRef {
+      <paramaccessor> private[this] val preference: String = _;
+      <stable> <accessor> <paramaccessor> def preference: String = PreferredDrink.this.preference;
+      def <init>(preference: String): Mocha.PreferredDrink = {
+        PreferredDrink.super.<init>();
+        ()
+        }
+    };
+    private[this] val perf: Mocha.PreferredDrink = new Mocha.this.PreferredDrink("mocha");
+    implicit <stable> <accessor> def perf: Mocha.PreferredDrink = Mocha.this.perf;
+    def enjoy(name: String)(implicit drink: Mocha.PreferredDrink): Unit = {
+      scala.Predef.print("Welcome, ".+(name));
+      scala.Predef.print(". Enjoy a ");
+      scala.Predef.print(drink.preference);
+      scala.Predef.println("!")
+    };
+    Mocha.this.enjoy("reader")(Mocha.this.perf)
+  }
+}
+```
