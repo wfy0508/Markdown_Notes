@@ -7190,7 +7190,27 @@ scala> new Outer#Inner
                  ^
 ```
 
-### 20.8 重定向类型
+### 20.8 改良类型
+
+当一个类从另一个类继承时，将前者称为另一个的`名义(nominal)子类型`。之所以是名义子类型，是因为每个类型都有一个名称，而这些名称被显式地声明为存在子类型关系。除此之外Scala还额外支持`结构(struct)子类型`，即`只要两个类型有兼容的成员，就可以说他们之间存在子类型关系`。Scala实现结构子类型的方式成为`改良类型(refinement type)`。
+
+名义子类型通常更方便，在新的设计中通常优先尝试名义子类型。名称是单个简短的标识符，因此比显式地列出成员的类型要更精简。但结构子类型通常更加灵活，不同的控件之间可能有相同的名字，比如画画draw()，一个西部牛仔拔枪draw()，两个名字相同，但并不能互相替代，当你不小心用错的时候，通常更加希望得到一个编译错误。
+
+尽管如此，结构子类型也有自身优势，有时候某个类型除了成员之外并没有更多的信息。假如定义一个可以包含食草动物的Pasture类，一种选择是定义一个AnimalThatEatsGrass特质在适用的类上混入。不过这样代码很啰嗦，Cow类已经声明了它是动物，并且食草，现在它还需要声明它是一个“食草动物”。
+
+除了定义AnimalThatEatsGrass外，还可以使用改良类型。只需要写下基类型Animal，然后加上一系列用花括号包括起来的成员即可。花括号中的成员进一步指定了基类中的成员类型。
+
+```scala
+Animal {type SuitableFood = Grass}
+```
+
+有了这个类型声明，就可以像这样来编写Pasture类：
+
+```scala
+class Pasture {
+  val animals: List[Animal {type SuitableFood = Grass}] = Nil
+}
+```
 
 ### 20.9 枚举
 
@@ -7535,3 +7555,146 @@ scala> US.Dollar + Europe.Euro
        US.Dollar + Europe.Euro
                           ^
 ```
+
+## 21 隐式转换和隐式参数
+
+### 21.1 隐式转换
+
+隐式转换通常在处理两个在开发是完全不知道对方存在的软件或类库时非常有用。他们各自都有自己的方式来描述某个概念，而这个概念在本质上是同一件事情。`隐式转换可以减少以从一个类型显式转换成另一个类型的需要`。
+
+Java包含一个名为Swing的类库来实现跨平台的用户界面，主要是处理操作系统的事件，将他们转换为平台独立的对象，并将这些事件传给事件监听器的应用代码。对于监听器，接口是ActionListener。如果没有隐式转换，使用到Swing的Scala程序就必须像Java那样使用内部类。
+
+这里创建一个按钮并挂上一个动作监听器的例子，每当按钮按下，这个动作监听器就会被调用：
+
+```scala
+val button = New JButton
+button.addActionListener(
+  new ActionListener{
+    def actionPerformed(event: ActionEvent) = {
+      println("pressed")
+    }
+  }
+)
+```
+代码中有大量不增加有用信息的样板代码，这里唯一有用的是println语句。对Scala更友好的版本应该接受函数作为入参，大幅地减少样板代码：
+
+```scala
+button.addActionListener( //类型不匹配
+  (_: ActionEvent) => println("pressed!")
+)
+```
+
+但是这个代码并不能正常工作（Scala 2.13中可以），addActionListener方法想要的是一个动作监听器，而我们给他的是一个函数，而通过隐式转换，这段代码是可行的。
+
+第一步：编写两个类型之前的隐式转换函数，这里是一个从函数到动作监听器的隐式转换：
+
+```scala
+implicit def function2ActionListener(f: ActionEvent => Unit) = {
+  new ActionListener{
+    def actionPerformed(event: ActionEvent) = f(event)
+  }
+}
+```
+
+定义了一个单参数方法接收一个函数并返回一个动作监听器，可以被直接调用：
+
+```scala
+button.addActionListener(
+  function2ActionListener(
+    (_: AvtionEvent) => println("pressed!")
+  )
+)
+```
+
+相比于内部类，那些样板代码被一个函数字面量和方法调用替换掉了，不过用隐式转换，还能做得更好。`由于function2ActionListener被标记为隐式的，可以不写出这个调用，编译器会自动插入`：
+
+```scala
+button.addActionListener(
+  (_: ActionEvent) => println("pressed!")
+)
+```
+
+这段代码会按照原样编译，不过会遇到一个类型错误，编译器在放弃之前，会查找一个能修复该问题的隐式转换，在本例中，编译器找到了function2ActionListener，它会尝试这个隐式转换，发现可行，就继续下去。
+
+### 21.2 隐式规则
+
+`隐式定义是指那些我们允许编译器插入程序已解决类型错误的定义`。例如，如果x + y不能通过编译，那么编译器可能会把它改成convert(x) + y，其中convert可能就是某种隐式转换。如果convert将x改成某种支持+方法的对象，那么这个改动就能修复这个程序。
+
+隐式转换受如下规则的约束：
+
+`标记规则：只有标记为implicit的定义才可用`。关键字implicit用来标记那些声明可变编译器用作隐式定义。可以标记任何变量、函数或对象定义：
+
+```scala
+implicit def intToString(x: Int) = x.toString
+```
+
+编译器只会在convert被标记为implicit时，才将x + y修改成convert(x) + y。
+
+`作用域规则：被插入的隐式转换必须是当前作用域的单个标识符，或者跟隐式转换的源类型或目标类型有关联`。Scala编译器只会考虑那些在作用域内的隐式转换。因此，必须以某种方式将隐式转换引入到当前作用域才能使用它们。不仅如此，`隐式转换在当前作用域必须是单个标识符`。编译器不会插入someVariable.convert这种形式的转换。如果想要someVariable.convert可用，必须引入它，成为单个标识符，引入后就可用。常见的做法是提供一个包含了一些有用隐式转换的Preamble对象。这样使用这个类库的代码就可以通过“import Preamble._”来访问该类库的隐式转换。
+
+此外，单标识符有个例外，`编译器还会在隐式转换的源类型或目标类型的伴生对象中查找隐式定义`。如果尝试将Dollar对象传给Euro，可以将一个从Dollar到Euro的隐式转换打包在Dollar或Euro任何一个类的伴生对象中：
+
+```scala
+object Dollar{
+  implicit def dollarToEuro(x: Dollar): Euro = ...
+}
+class Dollar{...}
+```
+
+作用于规则有助于模块化的推理，如果隐式转换是全局可用的，那么要理解某个代码的文件，就需要知道在程序的任何地方添加的每个隐式定义！
+
+`每一次规则：每次只能有一个隐式定义被插入`。编译器绝对不会将x + y重写为convert1(convert2(x)) + y。`如果编译器已经尝试某个隐式转换的过程当中，它不会在尝试另一个隐式转换的`。不过可以让隐式转换定义包含隐式参数的方式绕过这个限制。
+
+`显式优先原则：只要代码按编写的样子能通过类型检查，就不会尝试隐式定义`。我们总是可以将隐式转换标识符替换成显式的，代码会更长但歧义更少。
+
+#### 21.2.1 命名一个隐式转换
+
+隐式转换可以使用任何名称，隐式转换的名称只在两种情况下重要：
+
+- 当你想在方法引用中显式地写出来；
+- 为了决定在程序中的某个位置都有哪些隐式转换可用。
+
+下面定义一个包含两个隐式转换的对象：
+
+```scala
+object MyConversions{
+  implicit def stringWrapper(s: String): IndexedSeq[Char] = ...
+  implicit def intToString(x: Int): String = ...
+}
+````
+
+如果只需要其中一个隐式转换，可以只导入一个：
+
+```scala
+import MyConversions.stringWrapper
+```
+
+#### 21.2.2 在哪些地方会尝试隐式转换
+
+Scala总共有三个地方会用到隐式转换：
+
+- 转换到一个预期的类型；
+- 对某个（成员）选择接收端（即方法、方法调用等）的转换；
+- 隐式参数。
+
+到期望类型的转换可以在预期不同类型的上下文中使用（当前已持有）某个类型。例如，有一个String但想将它传给一个要求IndexSeq[Char]的方法，选择接收端的转换让我们适配方法调用的接收端（即方法调用的对象），如果原始类型不支持这个调用，例如“abc”.exists，这段代码会被转换为stringWrapper("abc").exists，因为exists在String上不可用，但是在IndexSeq[Char]可用。
+
+隐式参数通常用来给调用的函数提供更多关于调用者诉求的信息。隐式参数对于泛型函数尤其有用。
+
+### 21.3 隐式转换到一个预期的类型
+
+### 21.4 转换接收端
+
+#### 21.4.1 与新类型互操作
+
+#### 21.4.2 模拟新的语法
+
+#### 21.4.3 隐式类
+
+### 21.5 隐式参数
+
+### 21.6 上下文界定
+
+### 21.7 当有多个转换可选时
+
+### 21.8 调试
