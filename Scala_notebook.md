@@ -8117,6 +8117,7 @@ object Mocha extends App{
   }
   enjoy("reader")
 }
+```
 
 使用`scalac -Xprint:typer mocha.scala`命令后，返回：
 
