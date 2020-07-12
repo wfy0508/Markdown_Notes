@@ -4680,7 +4680,7 @@ res23: Int = 0
 var sum = 0
 def receive = {
   case Data(byte) => sum += byte
-  case GetCheckSum(requester) => 
+  case GetCheckSum(requester) =>
     val checksum = ~(sum & 0xFF) + 1
     requester ! checksum
 }
@@ -4752,7 +4752,7 @@ new PartialFunction[List[Int], Int] {
 在for表达式中也可以使用模式：
 
 ```scala
-for((country, city) <- capitals) 
+for((country, city) <- capitals)
   println("The capital of " + country + " is " + city)
 
 The capital of France is Pairs
@@ -5106,7 +5106,7 @@ res26: List[(Char, Int)] = List((a,1), (b,2), (c,3))
 
 ```scala
 scala> abcde.zipWithIndex
-res27: List[(Char, Int)] = List((a,0), (b,1), (c,2), (d,3), (e,4)) 
+res27: List[(Char, Int)] = List((a,0), (b,1), (c,2), (d,3), (e,4))
 ```
 
 也可以通过unzip还原列表：
@@ -6872,7 +6872,7 @@ scala> val x = 2
 x: Int = 2
 
 scala> new RationalTrait{
-     | val numerArg = 1 * x 
+     | val numerArg = 1 * x
      | val denomArg = 2 * x //初始化时，denomArg是0
      | }
 java.lang.IllegalArgumentException: requirement failed
@@ -7574,6 +7574,7 @@ button.addActionListener(
   }
 )
 ```
+
 代码中有大量不增加有用信息的样板代码，这里唯一有用的是println语句。对Scala更友好的版本应该接受函数作为入参，大幅地减少样板代码：
 
 ```scala
@@ -8029,7 +8030,7 @@ def maxList[T: Ordering[T]](elements: List[T]): T = elements match{
   case List(x) => x
   case x :: rest =>
     val maxRest = maxList(rest)
-    if (implicitly[Ordering[T]].gt(x, maxRest)) x 
+    if (implicitly[Ordering[T]].gt(x, maxRest)) x
     else maxRest
 }
 ```
@@ -8305,4 +8306,171 @@ def ::[U >: T](x: U): List[U] = new scala.::(x, this)
                            apples
 ```
 
-│
+事实上，::多态定义中的下界T不仅为了方便，对于List类的类型正确而言是必要的，这是因为从定义上讲List是协变的。
+
+假设有下面的定义：
+
+```scala
+def ::(x: T): List[T] = new scala.::(x, this)
+```
+
+19章讲过，方法参数会被当做逆变点，因此在上面的定义中，列表元素T位于逆变点，这样一来List就不能声明T是协变的。下界的定义实际上达到了两个目的：消除一个类型问题，同时让::方法用起来更灵活。列表拼接方法:::的定义跟::类似。
+
+```scala
+def :::[U >: T](prefix: List[U]): List[U] =
+  if (prefix.isEmpty) this
+  else prefix.head :: prefix.tail ::: this
+```
+
+列表拼接方法也是多态的，::和:::的方法可以展开为一下等效方法：
+
+```scala
+prefic.head :: prefix.tail ::: this
+//等效于
+prefix.head :: (prefix.tail ::: this)
+//等效于
+(prefix.tail ::: this).::(prefix.head)
+//等效于
+this.:::(prefix.tail).::(prefix.head)
+```
+
+### 22.2 ListBuffer类
+
+对列表的典型访问模式是递归的。例如，要对某个列表的每个元素递增而不是用map：
+
+```scala
+def incAll(xs: List[Int]): List[Int] = xs match{
+  case List() => List()
+  case x :: xs1 => x + 1 :: incAll(xs1)
+}
+```
+
+这个例子的缺陷是，它并不是尾递归的，每次递归调用都需要一个新的栈帧，在List较大的时候，可能会发生栈溢出的情况，如何编写一个支持任意大小的列表？一种方式是使用循环：
+
+```scala
+var result = List[Int]()
+for (x <- xs) result = result ::: List(x + 1)
+result
+```
+
+但这样写效率很低，:::的耗时跟首个操作元的长度成正比，整个操作的耗时跟列表的长度平方成正比。
+
+更好的方案是使用`列表缓冲ListBuffer`，列表缓冲允许对列表的元素做累加，可以用诸如“buf += elem”的操作在列表缓冲buf尾部追加elem元素。可以用toList操作将缓冲转换成列表。
+
+ListBuffer是scala.collection.mutable包里的一个类。使用之前需要导入：
+
+```scala
+import scala.collection.mutable.LustBuffer
+```
+
+通过ListBuffer，incAll的方法可以写成如下代码：
+
+```scala
+val buf = new ListBuffer[Int]
+for (x <- xs) buf += x + 1
+buf.toList
+```
+
+使用ListBuffer实现组织做到了追加操作（+=）和toList的操作都只消耗常量的时间。
+
+### 22.3 List类的实践
+
+List类大多数方法的实现并没有使用递归，而是通过循环和列表缓冲。例如List类的map方法的实现：
+
+```scala
+final override def map[U](f: T => U): List[U] = {
+  val b = new ListBuffer[U]
+  var these = this
+  while (!these.isEmpty){
+    b += f(these.head)
+    these = these.tail
+  }
+  b.toList
+}
+```
+
+尾递归的实现可以同样高效，但是一个普通的递归实现会更慢且伸缩性较差。toList方法的调用只用常量的时间，跟列表的长度无关。
+
+首先，先看::类的实现，这个类构造非空列表：
+
+```scala
+final case class ::[U](hd: U, private[scala] val tl: List[U]) extends List[U]{
+  def head = hd
+  def tl = tl
+  override def isEmpty: Boolean = false
+}
+```
+
+入参tl被声明为var，这意味着列表创建之后，列表的尾部是可以被修改的，且有private[scala]修饰符，它只能在scala这个内部被访问，在这个包之外的代码既不能写也不能读这个变量。
+
+由于ListBuffer是在scala.collection.mutable包中。ListBuffer可以访问列表单元格中的tl字段。事实上列表缓冲的元素就是用列表来表示的，而对列表缓冲追加元素，会涉及对列表最后一个::单元格的tl字段的修改，一下是ListBuffer类定义的开头部分：
+
+```scala
+package scala.collection.immutable
+final class ListBuffer[T] extends Buffer[T]{
+  private var start: List[T] = Nil
+  private var last0: ::[T] = _
+  private var exported: Boolean = false
+  ...
+}
+```
+
+ListBuffer有三个私有字段：
+
+- start: 指向缓冲中保存的所有元素的列表
+- last0: 指向该列表最后一个::单元格
+- exported: 表示该缓冲是否已经通过toList转成了列表
+
+toList操作非常简单：
+
+```scala
+override def toList: List[T] = {
+  exported = !start.isEmpty
+  start
+}
+```
+
+它返回由start执行元素列表，并且（如果列表是非空的）将exported置为true。toList非常高效，因为它并不会对保存在ListBuffer中的列表进行拷贝，不过如果在toList操作之后继续对它进行变更会发生什么？不过一旦变为列表，它就必须是不可变的。
+
+对last0的追加操作会修改start指向的列表。为了保持列表缓冲操作的正确性，需要一个全新的列表。实现方式是+=操作的第一行：
+
+```scala
+override def += (x: T) = {
+  if (exported) copy()
+  if (start.isEmpty){
+    last0 = new scala.::(x, Nil)
+    start = last0
+  }else {
+    val last1 = last0
+    last0 = new scala.::(x, Nil)
+    last1.tl = last0
+  }
+}
+```
+
+如果想要对列表尾部追加，就需要拷贝。不过，ListBuffer的实现方式确保了只有当列表缓冲被转成列表后还需要进一步扩展时，拷贝才是必要的。这在实际中很少见，裂变缓冲的大部分用例是逐个添加元素然后再做最后一次toList操作，这种情况不需要拷贝。
+
+### 22.4 外部可见的函数式
+
+列表从“外面”看是纯函数式的，而它的实现从“里面”看是指令式的。这个Scala的一个典型策略：`通过小心翼翼地界定非纯操作的作用试讲纯粹性和效率结合起来`。
+
+为什么坚持纯粹性？如果将List中的head或者tail作为可变的，这样的做法的弊端是让程序更加脆弱。需要注意的是`当用::构造列表时，会复用构建出来的列表的尾部`:
+
+```scala
+val ys = 1 :: xs
+val zs = 2 :: xs
+```
+
+列表ys和zs的尾部是共享的：它们指向相同的数据结构。这对于效率而言非常重要，如果每次添加新的元素都拷贝到列表xs，就会慢很多。由于到处都是共享的，如果允许改变列表元素，事情就会变得非常危险。
+
+如果通过下面的代码将列表ys截断成前两个元素：
+
+```scala
+ys.drop(2).tail = Nil //在Scala中不能这样做
+```
+
+作为副作用，会同时截断zs和xs。显然，要跟中所有变更很困难，这就是为什么`Scala在列表的实现上尽量采纳了共享和不可变的原则`。
+
+Scala中的List和ListBuffer的设计，跟Java中的String和StringBuffer类很相似，都想在保持纯的不可变的数据结构的同时提供一种高效的、渐进式的构造方式。
+
+对Scala列表来说，要么选择使用::来在列表头部添加元素，要么使用ListBuffer在末尾添加元素，至于选择哪个要看具体的场景。
