@@ -1657,7 +1657,6 @@ def processFile(filename: String, width: Int) = {
 
  **`=>`** 代表将左边的内容的转换为右边的内容的符号，这个函数将任何整型变量由`x`转换为`x+1`。
 
-
 由于函数值是对象，所以你可以将他们存储在一个变量中，它们也是函数，因此可以使用常用的括号函数调用符号来调用它们。
 
 ```scala
@@ -2261,7 +2260,7 @@ scala> containsNeg(List(1, 2, -3, 4))
 res2: Boolean = true
 ```
 
-这个`exists`代表了一种控制抽象，是Scala类库提供的一种特殊用途的循环结构，并不像while或for那样是语言内建的。，不过由于`exists`是Scala集合API中的公共函数，它减少的是调用方的代码重复。 
+这个`exists`代表了一种控制抽象，是Scala类库提供的一种特殊用途的循环结构，并不像while或for那样是语言内建的。，不过由于`exists`是Scala集合API中的公共函数，它减少的是调用方的代码重复。
 
 ### 9.3 柯里化
 
@@ -3754,7 +3753,6 @@ package bobsrockets{
     class Navigator{
       val map = new StartMap //和StartMap同在一个package中，能直接访问
     }
-
     class StartMap
   }
 
