@@ -8585,7 +8585,7 @@ for表达式的一个特别适合的应用领域是组合谜题。这类谜题�
 
 将这些部分解决方案列表视为堆栈很方便，其中k行中的皇后的坐标在列表中排在第一位，随后是k−1行中的q皇后，以此类推。堆栈的底部是放置在棋盘第一行的皇后的坐标。所有的解决方案一起被表示为一个列表的列表，列表中的每个元素都是一种解决方法。
 
-现在，为了在第k+1行中放置下一个皇后，需要为之前的每个解生成所有可能的位置，再增加一个皇后。这会产生另一个解决方案列表，这次的长度是k+1。继续这个过程，直到你得到棋盘大小N的所有解。
+现在，`为了在第k+1行中放置下一个皇后，需要为之前的每个解生成所有可能的位置，再增加一个皇后（按照一行一行进行构建）`。这会产生另一个解决方案列表，这次的长度是k+1。继续这个过程，直到你得到棋盘大小N的所有解。
 
 实现代码如下：
 
@@ -8628,11 +8628,134 @@ List((8,4), (7,2), (6,7), (5,3), (4,6), (3,8), (2,5), (1,1)), List((8,5), (7,2),
 
 ### 23.3 使用For表达式查询
 
+for符号在本质上等同于数据库查询语言的通用操作。下面定义一个Book类和一个books的列表：
+
+```scala
+case class Book(title: String, anthors: String*)
+
+val books: List[Book] =
+  List(
+    Book(
+      "Structure and Interpretation of Computer Programs",
+      "Abelson, Harold", "Sussman, Gerald J."
+    ),
+    Book(
+      "Principles of Compiler Design",
+      "Aho, Alfred", "Ullman, Jeffrey"
+    ),
+    Book(
+      "Programming in Modula-2",
+      "Wirth, Niklaus"
+    ),
+    Book(
+      "Elements of ML Programming",
+      "Ullman, Jeffrey"
+    ),
+    Book(
+      "The Java Language Specification", "Gosling, James",
+      "Joy, Bill", "Steele, Guy", "Bracha, Gilad"
+    )
+)
+
+books: List[Book] = List(Book(Structure and Interpretation of Computer Programs,WrappedArray(Abelson, Harold, Sussman, Gerald J.)), Book(Principles of Compiler Design,WrappedArray(Aho, Alfred, Ullman, Jeffrey)), Book(Programming in Modula-2,WrappedArray(Wirth, Niklaus)), Book(Elements of ML Programming,WrappedArray(Ullman, Jeffrey)), Book(The Java Language Specification,WrappedArray(Gosling, James, Joy, Bill, Steele, Guy, Bracha, Gilad)))
+```
+
+查询并返回作者中以“Gosling”开头的所有书籍的名字：
+
+```scala
+scala> for {
+  b <- books
+  a <- b.authors
+  if a startsWith "Gosling"
+} yield b.title
+
+res1: List[String] = List(The Java Language Specification)
+```
+
+或者查询包含“Program”的书籍：
+
+```scala
+scala> for {
+  b <- books
+  if (b.title indexOf "Program") >= 0
+} yield b.title
+
+res2: List[String] = List(Structure and Interpretation of Computer Programs, Programming in Modula-2, Elements of ML Programming)
+```
+
+或者查询一个人写了两本书：
+
+```scala
+scala> for{
+  b1 <- books
+  b2 <- books
+  if b1 != b2
+  a1 <- b1.authors
+  a2 <- b2.authors
+  if a1 == a2
+} yield a1
+
+res3: List[String] = List(Ullman, Jeffrey, Ullman, Jeffrey)
+```
+
+这种查询结果会返回重复的数据，可以移除重复的数据后再返回，先定义一个移除列表中重复数据的函数：
+
+```scala
+def removeDuplicates[A](xs: List[A]): List[A] = {
+  if (xs.isEmpty) xs
+  else
+    xs.head :: removeDuplicates(
+      xs.tail.filter(x => x != xs.head)
+    )
+}
+
+scala> removeDuplicates(res3)
+
+res13: List[String] = List(Ullman, Jeffrey)
+```
+
+和for表达式结合在一起：
+
+```scala
+xs.head :: removeDuplicates(
+  for (x <- xs.tail if x != xs.head)
+    yield x
+)
+```
+
 ### 23.4 翻译For表达式
+
+每个for表达式都可以用三个高阶函数map、flatMap和withFilter来表示。本节描述Scala编译器也使用的转换方案。
 
 #### 23.4.1 只有一个生成器
 
+```scala
+for (x <- expr1) yield expr2
+```
+
+可替换为
+
+```scala
+exprs.map(x => expr2)
+```
+
 #### 23.4.1 只有一个生成器和一个过滤器
+
+```scala
+for (x <- expr1; if expr2) yield expr3
+```
+
+可替换为
+
+```scala
+for (x <- expr1 withFilter (x => expr2)) yield expr3
+```
+
+此转换提供了另一个比原始表达式短一个元素的for表达式，因为在第一个生成器表达式上，if元素被转换为withFilter的应用程序。接着翻译第二个表达式，最后得到
+
+```scala
+expr1 withFilter (x => expr2) map (x => expr3)
+```
 
 #### 23.4.2 有两个生成器
 
