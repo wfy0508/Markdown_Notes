@@ -8622,7 +8622,11 @@ def queens(n: Int): List[List[(Int, Int)]] = {
 
 ```scala
 List(
-List((8,4), (7,2), (6,7), (5,3), (4,6), (3,8), (2,5), (1,1)), List((8,5), (7,2), (6,4), (5,7), (4,3), (3,8), (2,6), (1,1)), List((8,3), (7,5), (6,2), (5,8), (4,6), (3,4), (2,7), (1,1)), List((8,3), (7,6), (6,4), (5,2), (4,8), (3,5), (2,7), (1,1)), List((8,5), (7,7), (6,1), (5,3), (4,8), (3,6), (2,4), (1,2))
+    List((8,4), (7,2), (6,7), (5,3), (4,6), (3,8), (2,5), (1,1)),
+    List((8,5), (7,2), (6,4), (5,7), (4,3), (3,8), (2,6), (1,1)), 
+    List((8,3), (7,5), (6,2), (5,8), (4,6), (3,4), (2,7), (1,1)), 
+    List((8,3), (7,6), (6,4), (5,2), (4,8), (3,5), (2,7), (1,1)), 
+    List((8,5), (7,7), (6,1), (5,3), (4,8), (3,6), (2,4), (1,2))
 )
 ```
 
@@ -8733,7 +8737,7 @@ xs.head :: removeDuplicates(
 for (x <- expr1) yield expr2
 ```
 
-可替换为
+可替换为：
 
 ```scala
 exprs.map(x => expr2)
@@ -8745,7 +8749,7 @@ exprs.map(x => expr2)
 for (x <- expr1; if expr2) yield expr3
 ```
 
-可替换为
+可替换为：
 
 ```scala
 for (x <- expr1 withFilter (x => expr2)) yield expr3
@@ -8757,14 +8761,296 @@ for (x <- expr1 withFilter (x => expr2)) yield expr3
 expr1 withFilter (x => expr2) map (x => expr3)
 ```
 
+这样的转换方案也适应于过滤器有更多元素的情况，如下：
+
+```scala
+for (x <- expr1 if expr2; seq) yield expr3
+```
+
+会被翻译为：
+
+```scala
+for (x <- expr1 withFilter expr2; seq) yield expr3
+```
+
 #### 23.4.2 有两个生成器
+
+```scala
+for (x <- expr1; y <- expr2; seq) yield expr3
+```
+
+同样，假设seq是生成器、定义和过滤器的任意序列。事实上，seq也可能是空的，在这种情况下，在expr2之后不会有分号。在这样的情况下，转换方案保持不变。上面的for表达式被转换为一个flatMap程序：
+
+```scala
+expr1.flatMap(x => for(y <- expr2; seq) yield expr3)
+```
+
+到目前为止，给出的三个翻译方案足以翻译仅包含生成器和过滤器以及生成器仅绑定简单变量的表达式。
+
+下面，我们要找出所有至少写了两本书的作者：
+
+```scala
+for {b1 <- books;
+     b2 <- books if b1 != b2;
+     a1 <- b1.authors;
+     a2 <- b2.authors if a1 == a2
+} yield a1
+```
+
+此查询转换为以下map/flatMap/withFilter组合：
+
+```scala
+books flatMap(b1 =>
+  books withFilter(b2 => b1 != b2) flatMap(b2 =>
+    b1.authors flatMap(a1 =>
+      b2.authors withFilter (a2 => a1 == a2) map(
+        a2 => a1
+      )
+    )
+  )
+)
+```
+
+到目前为止，提供的转换方案还不能处理绑定整个模式而不是简单变量的生成器。它也没有涵盖定义。这两个方面将在接下来的两个小节中解释。
 
 #### 23.4.3 生成器中有模式匹配
 
-#### 23.4.4 有定义操作
+如果生成器的左侧不是一个简单的变量，而是一个模式：`pat`，那么转换方案就会变得更加复杂。for表达式绑定变量的元组的情况仍然相对容易处理。在这种情况下，适用于单变量的方案几乎相同。
+
+```scala
+for ((x1, x2, ..., xn) <- expr1) yield expr2
+```
+
+会翻译成：
+
+```scala
+expr1.map{case (x1, x2, ..., xn) => expr2}
+```
+
+如果生成器的左侧是一个任意的模式`pat`，而不是单个变量或元组，那么事情就会变得更加复杂。
+
+```scala
+for (pat <- expr1) yield expr2
+```
+
+会被翻译为：
+
+```scala
+expr1 withFilter {
+  case pat => true
+  case _ => false
+} map{
+  case pat => expr2
+}
+```
+
+也就是说，首先过滤生成的项，并且只映射那些与pat匹配的项，这样模式匹配就不会抛出MatchError。
+
+这里的方案只处理for表达式只有一个模式匹配生成器的情况。如果for表达式包含其他生成器、过滤器或定义，则应用类似的规则。
+
+#### 23.4.4 有赋值定义的翻译
+
+最后一个缺失的情况是for表达式包含嵌入的定义类操作。这是一个典型的例子：
+
+```scala
+for (x <- exprs; y = expr2; seq) yield expr3
+```
+
+假定seq是生成器序列、定义或者过滤器（有可能为空），这样的表达式会被翻译为：
+
+```scala
+for ((x, y) <- for (x <- expr1) yield (x, expr2); seq) yield expr3
+```
+
+对于精通语法的人来说，结论是在不引用由前面的生成器绑定的变量的表达式中嵌入这样的定义可能不是一个好主意，因为重新计算这些表达式会造成浪费。但是，像y = expr2这样的定义最好是写在for表达式的外面，更加容易理解：
+
+```scala
+for (x <- 1 to 1000; y = expensiveComputationNotInvolvingX)
+yield x * y
+//改为
+
+val y = expensiveComputationNotInvolvingX
+for (x <- 1 to 1000) yield x * y
+```
 
 #### 23.4.5 有循环
 
+前面的子节展示了如何对包含yield的表达式进行翻译。如果循环只是执行一个副作用，而不返回任何东西，那该怎么办呢？与前面的翻译类似，但比表达式更简单。原则上，前面的转换方案在转换中使用map或flatMap，for循环的转换方案只使用foreach。
+
+```scala
+for (x <- expr1) body
+```
+
+会被翻译为：
+
+```scala
+expr1 foreach (x => body)
+```
+
+复杂一点的表达式：
+
+```scala
+for (x <- expr1; if expr2; y <- expr3) body
+```
+
+翻译为：
+
+```scala
+expr1 withFilter(x => expr2) foreach (x => expr3 foreach(y => body))
+```
+
+例如，下面的表达式将一个矩阵中的所有元素汇总为一个列表的列表：
+
+```scala
+var sum = 0
+for (xs <- xss; x <- xs) sum += x
+```
+
+翻译为：
+
+```scala
+var sum = 0
+xss foreach (xs => xs foreach (x => sum += x))
+```
+
 ### 23.5 其他方式
 
+上一节演示了可以将for表达式转换为高阶函数map、flatMap和withFilter的应用。实际上，您也可以采用另一种方式:map、flatMap或filter的每个应用程序都可以表示为for表达式。
+
+下面是这三个方法在for表达式中的实现。这些方法包含在对象演示中，以区别于对Lists的标准操作。具体地说，这三个函数都接收列表作为参数，但是转换模式也可以用于其他集合类型：
+
+```scala
+object Demon{
+  def map[A, B](xs: List[A], f: A => B): List(B) = {
+    for (x <- xs) yield f(x)
+  }
+
+  def flatMap[A, B](xs: List[A], f: A => B): List(B) = {
+    for (x <- xs; y <- f(x)) yield y
+  }
+
+  def filter[A](xs: List[A], p: A => Boolean): List[A] = {
+    for (x <- xs if p(x)) yield x
+  }
+}
+```
+
 ### 23.6 翻译For表达式方式汇总
+
+因为for表达式的转换只依赖于方法map、flatMap和withFilter的存在，所以可以将for表示法应用于大量数据类型。
+
+前面的例子中，将for表达式应用于列表和数组。它们之所以能够支持for表达式，是因为列表和数组定义了`map`、`flatMap`和`withFilter`等操作。由于它们还定义了`foreach`方法，所以这些数据类型也可以使用for循环。
+
+除了列表和数组之外，Scala标准库中还有许多其他类型支持相同的4种方法，因此也允许使用for表达式。包括ranges、iterators、streams和sets的所有实现。自定义的数据类型也完全有可能通过定义必要的方法来支持for表达式。要支持完整范围的for表达式和for循环，需要将map、flatMap、withFilter和foreach定义为数据类型的方法。但是也可以定义这些方法的子集，从而支持for表达式或for循环的所有可能的子集。
+
+下面是一些使用规则：
+
+- 如果类型只定义map方法，则允许由单个生成器组成的表达式。
+- 如果定义了flatMap和map，那么for表达式允许使用多个生成器。
+- 如果定义了foreach，它就允许循环(具有单个和多个生成器)。
+- 如果定义withFilter，则允许在for表达式中以if开头的过滤器表达式。
+
+`for表达式的转换发生在类型检查之前`。这样可以获得最大的灵活性，因为唯一的要求是展开for表达式类型检查的结果。Scala没有为for表达式本身定义类型规则，也不要求方法map、flatMap、withFilter或foreach具有任何特定的类型签名。
+
+不过，有一种典型的设置可以捕获用于for表达式转换的高阶方法的最常见意图。假设您有一个参数化的类C，它通常代表某种集合。就会很自然地为map、flatMap、withFilter和foreach选择以下类型签名：
+
+```scala
+abstract class C[A]{
+  def map[B](f: A => B): C[B]
+  def flatMap[B](f: A => C[B]): C[B]
+  def withFilter(p: A => Boolean): C[A]
+  def foreach(b: A => Unit): Unit
+}
+```
+
+## 24 深入集合类
+
+### 24.1 可变与不可变集合
+
+### 24.2 集合一致性
+
+### 24.3 Traversable特质
+
+### 24.4 Iterable特质
+
+#### 24.4.1 谁同时拥有Traversable和Iterable
+
+#### 24.4.2 Iterable子类型
+
+### 24.5  Seq, IndexedSeq, and LinearSeq序列特质
+
+#### 24.5.1 缓冲区
+
+### 24.6 集合(Sets)
+
+### 24.7 映射(Maps)
+
+### 24.8 具体不可变集合类
+
+#### 24.8.1 列表(Lists)
+
+#### 24.8.2 流(Streams)
+
+#### 24.8.3 向量(Vectors)
+
+#### 24.8.4 不可变栈(Stacks)
+
+#### 24.8.5 不可变队列(Queues)
+
+#### 24.8.6 Ranges
+
+#### 24.8.7 哈希树
+
+#### 24.8.9 红黑树
+
+#### 24.8.10 不可变点集
+
+#### 24.8.11 List maps
+
+### 24.9 具体可变集合类
+
+#### 24.9.1 数组缓冲
+
+#### 24.9.2 列表缓冲
+
+#### 24.9.3 字符串构建器
+
+#### 24.9.4 链表
+
+#### 24.9.5 双向链表
+
+#### 24.9.6 可变列表
+
+#### 24.9.7 队列
+
+#### 24.9.8 数组序列
+
+#### 24.9.9 栈
+
+#### 24.9.10 数组栈
+
+#### 24.9.11 哈希表
+
+#### 24.9.12 弱散列Maps
+
+#### 24.9.13 并发Maps
+
+#### 24.9.14 可变点集
+
+### 24.10 数组
+
+### 24.11 字符串
+
+### 24.12 性能特性
+
+### 24.13 等式
+
+### 24.14 视图
+
+### 24.15 迭代器
+
+#### 24.15.1 缓冲迭代器
+
+### 24.16 从scratch创建集合
+
+### 24.17 比较Java集合和Scala集合
