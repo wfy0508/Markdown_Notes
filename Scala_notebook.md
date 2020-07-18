@@ -8473,7 +8473,7 @@ Scala中的List和ListBuffer的设计，跟Java中的String和StringBuffer类很
 
 对Scala列表来说，要么选择使用::来在列表头部添加元素，要么使用ListBuffer在末尾添加元素，至于选择哪个要看具体的场景。
 
-## 23 重访For表达式
+## 23 重访for表达式
 
 第16章演示了高阶函数，如map、flatMap和filter，提供了处理列表的强大结构。但有时这些函数所要求的抽象级别会使程序有点难以理解。
 
@@ -8517,7 +8517,7 @@ scala> persons withFilter (p => !p.isMale) flatMap(p => (p.children map(c => (p.
 res3: List[(String, String)] = List((Julie,Lara), (Julie,Bob))
 ```
 
-这样写可以解决问题，但是这段代码并不那么容易读写，如果改用For表达式则会简单易于理解：
+这样写可以解决问题，但是这段代码并不那么容易读写，如果改用for表达式则会简单易于理解：
 
 ```scala
 for (p <- persons; if !p.isMale; c <- p.children)
@@ -8541,9 +8541,9 @@ for {p <- persons
 res5: List[(String, String)] = List((Julie,Lara), (Julie,Bob))
 ```
 
-### 23.1 For表达式
+### 23.1 for表达式
 
-通常来说，For表达式是这样的：
+通常来说，for表达式是这样的：
 
 ```scala
 for (seq) yield expr
@@ -8630,7 +8630,7 @@ List(
 )
 ```
 
-### 23.3 使用For表达式查询
+### 23.3 使用for表达式查询
 
 for符号在本质上等同于数据库查询语言的通用操作。下面定义一个Book类和一个books的列表：
 
@@ -8727,7 +8727,7 @@ xs.head :: removeDuplicates(
 )
 ```
 
-### 23.4 翻译For表达式
+### 23.4 翻译for表达式
 
 每个for表达式都可以用三个高阶函数map、flatMap和withFilter来表示。本节描述Scala编译器也使用的转换方案。
 
@@ -8813,7 +8813,7 @@ books flatMap(b1 =>
 
 到目前为止，提供的转换方案还不能处理绑定整个模式而不是简单变量的生成器。它也没有涵盖定义。这两个方面将在接下来的两个小节中解释。
 
-#### 23.4.3 生成器中有模式匹配
+#### 23.4.3 翻译生成器中的模式
 
 如果生成器的左侧不是一个简单的变量，而是一个模式：`pat`，那么转换方案就会变得更加复杂。for表达式绑定变量的元组的情况仍然相对容易处理。在这种情况下，适用于单变量的方案几乎相同。
 
@@ -8848,7 +8848,7 @@ expr1 withFilter {
 
 这里的方案只处理for表达式只有一个模式匹配生成器的情况。如果for表达式包含其他生成器、过滤器或定义，则应用类似的规则。
 
-#### 23.4.4 有赋值定义的翻译
+#### 23.4.4 翻译(for表达式中的)定义
 
 最后一个缺失的情况是for表达式包含嵌入的定义类操作。这是一个典型的例子：
 
@@ -8873,7 +8873,7 @@ val y = expensiveComputationNotInvolvingX
 for (x <- 1 to 1000) yield x * y
 ```
 
-#### 23.4.5 有循环
+#### 23.4.5 翻译for循环
 
 前面的子节展示了如何对包含yield的表达式进行翻译。如果循环只是执行一个副作用，而不返回任何东西，那该怎么办呢？与前面的翻译类似，但比表达式更简单。原则上，前面的转换方案在转换中使用map或flatMap，for循环的转换方案只使用foreach。
 
@@ -8913,7 +8913,7 @@ var sum = 0
 xss foreach (xs => xs foreach (x => sum += x))
 ```
 
-### 23.5 其他方式
+### 23.5 反过来
 
 上一节演示了可以将for表达式转换为高阶函数map、flatMap和withFilter的应用。实际上，您也可以采用另一种方式:map、flatMap或filter的每个应用程序都可以表示为for表达式。
 
@@ -8935,7 +8935,7 @@ object Demon{
 }
 ```
 
-### 23.6 翻译For表达式方式汇总
+### 23.6 泛化for表达式
 
 因为for表达式的转换只依赖于方法map、flatMap和withFilter的存在，所以可以将for表示法应用于大量数据类型。
 
@@ -8965,17 +8965,201 @@ abstract class C[A]{
 
 ## 24 深入集合类
 
+Scala自带一个强大而优雅的集合类库，尽管这些集合API看上去没什么，它们对你的编程风格的影响可谓巨大。通常，就好比把整个集合而不是集合中的元素当做构建单元来组织上层逻辑，这种编程风格需要适应，但是Scala也有很过不错的特性，它们精简、易用、安全、快速而且通行。
+
 ### 24.1 可变与不可变集合
+
+所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找到。大多数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
+
+- scala.collection.immutable包中的集合对所有人都是不可变的，无论怎么访问都会交出相同元素的集合。
+
+- scala.collection.mutable包中的集合有一些操作可以当场修改集合，这些操作允许来编写改变集合的代码。
+
+- scala.collection包中的集合既可以是可变的，也可以是不可变的。例如，scala.collection.IndexSeq[T]是scala.collection.immutable.IndexedSeq[T]和scala.collection.mutable.IndexedSeq[T]的超类型。一般而言，scala.collection包中的根(root)集合定义了跟不变集合相同的接口，而通常，scala.collection.mutable包中的可变集合会在上述不可变接口的基础上添加一些有副作用的修改操作。
+
+根集合和不可变集合的区别是，`根集合的使用方只知道自己不能修改这个集合，而不可变集合的使用方确认没人可以修改这个集合`。尽管根集合的静态类型没有提供修改集合的操作，它运行时类型仍有可能是一个可变集合，能够被使用方修改。
+
+`Scala默认选择不可变集合`。如果需要使用可变集合，需要显式地导入。
+
+集合类继承关系中最后一个包是collection.generic。这个包包含了那些用于实现集合的构建单元。通常，集合类会选择将部分操作交给generic中的类的实现来完成。集合框架的日常使用中并不需要引入generic包中的类。
 
 ### 24.2 集合一致性
 
+下面给出了那些最重要的集合类，大部分类都有三个版本：`根、可变的和不可变的`，唯一例外的是`Buffer特质，它只在可变集合中出现`：
+
+```scala
+Traversable
+  Iterable
+    Seq
+     IndexedSeq
+       Vector
+       ResizableArray
+       GenericArray
+    LinearSeq
+       MutableList
+       List
+       Stream
+    Buffer
+       ListBuffer
+       ArrayBuffer
+  Set
+    SortedSet
+      TreeSet
+    HashSet (mutable)
+    LinkedHashSet
+    HashSet (immutable)
+    BitSet
+    EmptySet, Set1, Set2, Set3, Set4
+  Map
+    SortedMap
+       TreeMap
+    HashMap (mutable)
+    LinkedHashMap (mutable)
+    HashMap (immutable)
+    EmptyMap, Map1, Map2, Map3, Map4
+```
+
+每一种集合都可以使用相同的一致语法来创建：
+
+```scala
+Traversable(1, 2, 3)
+Iterable("x", "y", "z")
+Map("x" -> 24, "y" -> 25, "z" -> 26)
+Set(Color.Red, Color.Green, Color.Blue)
+SortedSet("hello", "world")
+Buffer(x, y, z)
+IndexedSeq(1.0, 2.0)
+LinearSeq(a, b, c)
+```
+
+同样的原则也适用于特定的集合实现：
+
+```scala
+List(1, 2, 3)
+HashMap("x" -> 24, "y" -> 25, "z" -> 26)
+```
+
+所有集合的toString方法也会产生相似的输出，类型名加上圆括号括起来的元素。`所有的集合都支持由Traversable提供的API`。不过它们的方法都返回自己的类而不是根类Traversable，这样返回的类型更加精确。
+
+```scala
+scala> List(1, 2, 3) map (_ + 1)
+res0: List[Int] = List(2, 3, 4)
+
+scala> Set(1, 2, 3) map(_ * 2)
+res1: scala.collection.immutable.Set[Int] = Set(2, 4, 6)
+```
+
 ### 24.3 Traversable特质
+
+在继承类的顶端是Traversable特质，它唯一的抽象操作是foreach：
+
+```scala
+def foreach[U](f: Elem => U)
+```
+
+实现Traversable的集合类只需要定义这个方法即可，其他方法都可以从Traversable继承。
+
+Traversable定义了很多具体方法：
+
+- **添加++：** 可以将两个Traversable加在一起，或将某个迭代器的所有元素添加到Traversable。
+- **映射操作：** map, flatMap和collect，通过对集合的元素应用某个函数来产生一个新的集合。
+
+- **转换：** toIndexedSeq、toIterable、toStream、toArray、toList、toSeq、toSet和toMap，将一个Traversable集合转换为更具体的集合。如果原集合已经匹配了所需要的集合类型，所有的这些转换就会直接返回原集合。例如，对List使用toList操作，就会返回List本身。
+- **拷贝操作：** copyToBuffer和copyToArray。
+- **大小操作：** isEmpty、nonEmpty、size和hasDefiniteSize（表示集合是否有限大小）。
+- **元素获取：** head、last、headOption、lastOption和find。
+- **子集合获取操作：** takeWhile、tail、init、slice、take、drop、filter、dropWhile、filterNot和withFilter。
+- **细分：** splitAt、span、partition和groupBy。
+- **元素测试：** exists、forall和count。
+- **折叠：** foldLeft、foldRight、/:、:\、reduceLeft和reduceRight，对连续的元素应用某个二元操作。
+- **特殊折叠：** sum、product、min和max。
+- **字符串操作：** mkString、addString和stringPrefix。
+- **视图操作：** 由两个重载的view方法组成，视图是一个惰性求值的集合，将在后面介绍。
 
 ### 24.4 Iterable特质
 
-#### 24.4.1 谁同时拥有Traversable和Iterable
+该特质的所有方都是通过抽象方法iterator来定义的。这个抽象方法的作用是逐个交出集合的元素。从Traversable继承下来的foreach方法在Iterable中的定义就用到了iterator：
 
-#### 24.4.2 Iterable子类型
+```scala
+def foreach[U](f: Elem => U): Unit = {
+  val it = iterator
+  while (it.hadNext) f(it.next())
+}
+```
+
+很多Iterable的子类都重写了这个在Iterable中的foreach标准实现，因为可以提供更高效的表现。
+
+`Iterable还有两个方法迭代器：grouped和sliding。它们并不返回单个元素，而是原始集合的整个子序列`。grouped将元素分段，sliding交出的是对元素的一个滑动窗口：
+
+```scala
+scala> val xs = List(1, 2, 3, 4, 5)
+xs: List[Int] = List(1, 2, 3, 4, 5)
+
+scala> val git = xs grouped 3
+git: Iterator[List[Int]] = <iterator>
+
+scala> git.next()
+res2: List[Int] = List(1, 2, 3)
+
+scala> git .next()
+res3: List[Int] = List(4, 5)
+
+scala> val sit = xs sliding 3
+sit: Iterator[List[Int]] = <iterator>
+
+scala> sit.next()
+res4: List[Int] = List(1, 2, 3)
+
+scala> sit.next()
+res5: List[Int] = List(2, 3, 4)
+
+scala> sit.next()
+res6: List[Int] = List(3, 4, 5)
+```
+
+Iterable还对Traversable添加了一些其他方法，这个方法只有在有迭代器存在的情况下才能得以高效地实现：
+
+|操作|操作含义|
+|--|--|
+|**抽象方法：**||
+|xs.iterator|按照与foreach遍历元素的顺序交出xs每个元素的迭代器|
+|**其他迭代器:**||
+|xs grouped size|交出固定大小“段”的迭代器|
+|xs sliding size|交出固定大小滑动窗口的元素的迭代器|
+|**子集合：**||
+|xs takeRight n|包含xs后n个元素的集合（如果没有定义顺序，就是任意的n个元素）|
+|xs dropRight n|集合除去xs takeRight n外的部分|
+|**拉链：**||
+|xs zip ys|去两个对应元素的对偶组成的Iterable|
+|xs zipAll ys|用较短的序列用xs或者ys的元素值延展成相同的长度|
+|xs.zipWithIndex|由xs中的元素及其下标的对偶组成的Iterable|
+|**比较：**||
+|xs sameElements ys|测试是否xs和ys包含顺序相同元素|
+
+#### 24.4.1 为什么要同时有Traversable和Iterable？
+
+为什么要在Iterable上多加一个TRaversable特质，还要额外增加一层foreach而不是用iterator来定义其方法的抽象特质？`增加Traversable的原因之一是有时候提供foreach比提供iterator的实现更加容易`。
+
+假如要定义一个二叉树的类继承关系，其中叶子节点的元素是整数类型的，可能会这样编写：
+
+```scala
+sealed abstract class Tree
+case class Branch(left: Tree, right: Tree) extends Tree
+case class Node(elem: Int) extends Tree
+```
+
+现在要遍历这些二叉树，怎么做呢？可以让Tree继承自Traversable[Int]，然后像这样定义一个foreach方法：
+
+```scala
+sealed abstract class Tree extends Traversable[Int]{
+  def foreach[U](f: Int => U) = this match{
+    case Node(elem) => f(elem)
+    case Branch(1, r) => l foreach f; r foreach f
+  }
+}
+```
+
+#### 24.4.2 Iterable子类目
 
 ### 24.5  Seq, IndexedSeq, and LinearSeq序列特质
 
