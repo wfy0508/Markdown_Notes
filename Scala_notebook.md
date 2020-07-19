@@ -1970,7 +1970,7 @@ two
 three
 ```
 
-在函数内部，重复参数的的类型为参数声明类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
+在函数内部，重复参数的的类型为参数声��类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
 
 ```scala
 scala> val arr = Array("One", "Two", "Three")
@@ -7328,7 +7328,7 @@ abstract class Dollar extends AbstractCurrency{
 }
 ```
 
-这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现这两个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
+这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现这���个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
 
 ```scala
 def +(that: Currency): Currency = new Currency{
@@ -8969,7 +8969,7 @@ Scala自带一个强大而优雅的集合类库，尽管这些集合API看上去
 
 ### 24.1 可变与不可变集合
 
-所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找到。大多数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
+所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找到。大��数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
 
 - scala.collection.immutable包中的集合对所有人都是不可变的，无论怎么访问都会交出相同元素的集合。
 
@@ -9159,17 +9159,186 @@ sealed abstract class Tree extends Traversable[Int]{
 }
 ```
 
+`遍历平衡树的耗时跟树中元素的数量成正比`，对于`N`个叶子的平衡树，会有`N-1`个Branch类的内部节点，因此遍历整棵树的步数为`N + N - 1`。
+
+下面把树做成Iterable做对比，让Tree继承自Iterable[Int]，然后定义一个iterator方法：
+
+```scala
+sealed abstract class Tree extends Iterable[Int]{
+  def iterator: Iterator[Int] = this match{
+    case Node(elem) => Iterator.single(elem)
+    case Branch(l, r) => l.iterator ++ r.iterator
+  }
+}
+```
+
+看上去和foreach类似，但这里的++操作有一个运行效率的问题，像l.iterator ++ r.iterator这样的拼接起来的迭代器，每交出一个元素，都需要多一层计算来判断使用的哪一个迭代器（l.iterator还是r.iterator）。总体而言，对于N个叶子的平衡树而言，需要log(N)次计算。因此访问某个数所有元素的成本从foreach遍历的大约`2N`次增加到iterator的`N*log(N)`。如果树的元素有100万个，那就意味着foreach大约需要200万步，而iterator需要将近2000万步，因此foreach更具优势。
+
 #### 24.4.2 Iterable子类目
 
-### 24.5  Seq, IndexedSeq, and LinearSeq序列特质
+Iterable之下有三个特质：Seq、Set和Map。这些特质的共同特点是都实现了PartialFunction特质，只不过实现的方式略有不同。
 
-#### 24.5.1 缓冲区
+对于Seq而言，apply是位置下标，元素的下标总是从0开始，例如：
 
-### 24.6 集合(Sets)
+```scala
+scala> Seq(1, 2, 3)(1)
+res0: Int = 2
+```
+
+对于Set而言，apply是成员测试，
+
+```scala
+scala> Set('a', 'b', 'c')('b')
+res1: Boolean = true
+
+scala> Set()('b')
+res2: Boolean = false
+```
+
+对于Map而言，apply是选择：
+
+```scala
+scala> Map('a' -> 1, 'b' -> 2, 'c' -> 3)('b')
+res3: Int = 2
+```
+
+### 24.5 序列型特质Seq, IndexedSeq, and LinearSeq
+
+Seq特质代表序列，序列是一种有长度（length）且元素都有固定的从0开始的下表位置的迭代：
+
+|操作|操作含义|
+|--|--|
+|**下边和长度:**||
+|xs(i)|xs中下标为i的元素|
+|xs isDefinedAt i|测试i是否包含在xs.indices中|
+|xs.length|xs的长度|
+|xs.lengthCompare ys|如果xs的长度大于ys则返回1，小于返回-1，等于返回0|
+|xs.indices|xs索引的范围，从0到xs.length - 1|
+|**下标检索:**||
+|xs indexOf x|xs中首个等于x的下标|
+|xs lastIndexOf x|xs中最后一个等于x的下标|
+|xs indexOfSlice ys|xs中首个满足自该元素起的连续元素能够构成ys序列的下标|
+|xs lastIndexOfSlice ys|xs中最后一个满足自该元素起的连续元素能够构成ys序列的下标|
+|xs indexWhere p|xs中首个满足p的元素的下标|
+|xs segmentLength (p, i)|xs中自xs(i)开始最长满足p的片段的长度|
+|xs prefixLength p|xs中最长的连续满足跑的前缀的长度|
+|**添加:**||
+|x +: xs |将x添加到xs的头部|
+|xs :+ x |将x添加到xs的尾部|
+|xs padTo (len, x)|将x追加到xs知道长度达到len后得到的序列|
+|**更新:**||
+|xs patch (i, ys, r)|将xs中从下标i开始的r个元素替换成ye得到的序列|
+|xs updated (i, x) |下标i的元素被替换成x的对xs的拷贝|
+|xs(i) = x|将下标i的元素更新为x|
+|**排序:**||
+|xs.sorted|用xs元素的标准类型对xs排序|
+|xs sortWith lessThan |以lessThan为比较操作对xs进行排序|
+|xs sortBy f|通过对元素应用f，然后比较其顺序|
+|**反转:**||
+|xs.reverse |颠倒xs的顺序|
+|xs.reverseIterator|以颠倒的顺序交出xs所有元素的迭代器|
+|xs reverseMap f|以颠倒的顺序对xs的元素映射f后得到的序列|
+|**比较:**||
+|xs startsWith ys |测试xs是否以ys开始|
+|xs endsWith ys |测试xs是否已ys结束|
+|xs contains x|xs是否包含x|
+|xs containsSlice ys|xs时候包含与ys相等的连续子序列|
+|**多重Set操作**||
+|xs intersect ys|交集，保持xs中的顺序|
+|xs diff ys|差集，保持xs中的顺序|
+|xs union ys|并集，等同于xs ++ ys|
+|xs.distinct|不包含重复元素的xs的子序列|
+
+Seq有两个子特质：LinearSeq和IndexedSeq。这两个特质并没有添加任何新的操作，不过它们各自拥有不同的性能特征。
+
+- LinearSeq拥有高效的head和tail操作
+- IndexedSeq拥有高效的apply、length和update操作（如果是可变的）。
+
+`List`是一种常用的线性序列，`Stream`也是，而Array和ArrayBuffer是两种常用的`经过下标索引的序列`。`Vector类提供了介于索引和现行访问之间有趣的妥协，它即拥有从效果上讲常量时间的索引开销，也拥有时间线性的访问开销`。由于这个特点，向量(Vector)是混用两种访问模式（索引的和线性的）的一个好的基础。
+
+#### 24.5.1 缓冲
+
+可变列表的一种重要子类目是缓冲。缓冲不仅允许对已有元素的更新，同时还允许元素插入，移除和在缓冲末尾高效地添加新元素，主要支持的方法如下：
+
+|操作|操作含义|
+|--|--|
+|**添加：**||
+|buf += x|将元素追加到buf中，并返回buf本身|
+|buf += (x, y, z)|将指定元素添加到buf|
+|buf ++= xs|将xs的所有元素添加到缓冲|
+|x +=: buf|将x添加到buf的头部|
+|xs ++=: buf|将xs中的所有元素添加到buf头部|
+|buf insert (i, x)|在buf的下标i位置插入x|
+|buf insertAll (i, xs)|将xs的全部元素插入到下标i位置|
+|**移除：**||
+|buf -= x|移除buf中的x|
+|buf remove i|移除buf中下标为i的元素|
+|buf remove (i, n)|移除buf中从下标i开始的n个元素|
+|buf trimStart n|移除buf的前n个元素|
+|buf trimEnd n|移除buf后n和元素|
+|buf.clear()|移除buf中所有元素|
+|**克隆：**||
+|buf.clone|生成一个和buf相同的缓冲|
+
+ 两个常用的Buffer实现为：`ListBuffer`和`ArrayBuffer`。
+
+- ListBuffer背后是List，支持List的高效转换
+- ArrayBuffer背后是数组，可以被快速地转换成数组
+
+### 24.6 集(Sets)
+
+`Set是没有重复元素的Iterable`，主要操作如下：
+
+- **测试**：contains，apply和subsetOf，Set的contains等同于apply。
+- **添加**：+和++。将一个元素或者多个元素添加到Set，交出新的Set。
+- **移除**：-和--。移除一个或多个元素，交出新的Set。
+- **集操作**：交集、差集和并集。这种操作有两种形式：字母的和符号的。字母的有intersect、union和diff。而符号的有&、|和&~。Set从Traversable继承的++可以被看成是union或|的另一个别名。只不过++接收Traversable的入参，而union和|的入参是Set。
+
++=和-=这样的方法名意味着对于可变和不可变集，可以使用非常类似的代码来处理。参考下面这段用到不可变集s的解释器会话：
+
+```scala
+scala> var s = Set(1, 2, 3)
+s: scala.collection.immutable.Set[Int] = Set(1, 2, 3)
+
+scala> s += 4
+
+scala> s -= 2
+
+scala> s
+res6: scala.collection.immutable.Set[Int] = Set(1, 3, 4)
+```
+
+s += 4的语句是是s = s + 4的简写。因此这段代码`调用集s的+方法`，然后将结果赋值给变量s。
+
+对于可变集的处理：
+
+```scala
+scala> val s = scala.collection.mutable.Set(1, 2, 3)
+s: scala.collection.mutable.Set[Int] = Set(1, 2, 3)
+
+scala> s += 4
+res7: s.type = Set(1, 2, 3, 4)
+
+scala> s
+res8: scala.collection.mutable.Set[Int] = Set(1, 2, 3, 4)
+
+scala> s -= 2
+res9: s.type = Set(1, 3, 4)
+```
+
+这个s += 4是`调用可变集的+=方法`，当场修改了集的内容，同理，这次s -= 2`调用的是同一个集上的-=方法`。
+
+比较这个例子，可以得出一个重要原则：通常可以用一个保存为`var的不可变集合`来`替换`一个保存为`val的可变集合`，或者反过来。只要是没有执行这些集合的别名让你可以观测到它到底是`当场修改`还是`返回了新的集合`，这样做就是可行的。
+
+可变集还提供了add和remove作为+=和-=的变种。区别在于add和remove返回的是表示该操作是否让集发生了改变布尔值结果。
+
+目前**可变集的默认实现使用了`哈希表`来保存集的元素**。**不可变集的默认实现是使用了一种可以`跟集的元素数量相适配的底层表示（EmptyMap, Map1, Map2, Map3, Map4, 4个以上使用哈希字典树HashMap）`**。
+
+对于4个元素以内的不可变集比可变集更加紧凑，也更加高效。因此如果你逾期用到的集比较小，尽量用不可变集。
 
 ### 24.7 映射(Maps)
 
-### 24.8 具体不可变集合类
+### 24.8 具体的不可变集合类
 
 #### 24.8.1 列表(Lists)
 
@@ -9181,7 +9350,7 @@ sealed abstract class Tree extends Traversable[Int]{
 
 #### 24.8.5 不可变队列(Queues)
 
-#### 24.8.6 Ranges
+#### 24.8.6 区间(Ranges)
 
 #### 24.8.7 哈希树
 
@@ -9191,7 +9360,7 @@ sealed abstract class Tree extends Traversable[Int]{
 
 #### 24.8.11 List maps
 
-### 24.9 具体可变集合类
+### 24.9 具体的可变集合类
 
 #### 24.9.1 数组缓冲
 
@@ -9215,7 +9384,7 @@ sealed abstract class Tree extends Traversable[Int]{
 
 #### 24.9.11 哈希表
 
-#### 24.9.12 弱散列Maps
+#### 24.9.12 弱哈希Maps
 
 #### 24.9.13 并发Maps
 
@@ -9225,9 +9394,9 @@ sealed abstract class Tree extends Traversable[Int]{
 
 ### 24.11 字符串
 
-### 24.12 性能特性
+### 24.12 性能特征
 
-### 24.13 等式
+### 24.13 相等性
 
 ### 24.14 视图
 
@@ -9235,6 +9404,6 @@ sealed abstract class Tree extends Traversable[Int]{
 
 #### 24.15.1 缓冲迭代器
 
-### 24.16 从scratch创建集合
+### 24.16 从头创建集合
 
-### 24.17 比较Java集合和Scala集合
+### 24.17 Java和Scala集合互转
