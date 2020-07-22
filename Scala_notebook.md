@@ -9336,15 +9336,230 @@ res9: s.type = Set(1, 3, 4)
 
 对于4个元素以内的不可变集比可变集更加紧凑，也更加高效。因此如果你逾期用到的集比较小，尽量用不可变集。
 
-### 24.7 映射(Maps)
+### 24.7 Maps
+
+Map是键值对类型的Iterable。Scala中的Predef类定义了一个隐式转换，允许你写`key -> value`等同于写`(key, value)`也就是`Map("x" -> 24, "y" -> 25, "z" -> 26)`和`Map(("x", 24), ("y", 25), ("z", 26))`是一样的。
+
+支持的主要操作如下：
+
+- **查找**： apply，get，getOrElse，contains和isDefinedAt. 这些操作将映射转换为部分应用函数从键映射到值上。基本的查找值的方法为：
+
+```scala
+def get(key): Option[Value]
+```
+
+`m get key`操作返回Map中与key对应的值，并放置于`Some`中:
+
+```scala
+scala> val a = Map('a' -> 1, 'b' -> 2, 'c' -> 3)
+a: scala.collection.immutable.Map[Char,Int] = Map(a -> 1, b -> 2, c -> 3)
+
+scala> a get 'a'  //有对应的键，就返回对应的值
+res0: Option[Int] = Some(1)
+
+scala> a get 'd' //没有对应的键，就返回None
+res1: Option[Int] = None
+```
+
+Map是也定义了apply方法，会直接返回对应的值，而不是放置于`Some`中，如果查找不到，则抛出key not found错误。
+
+```scala
+scala> a('d')
+java.util.NoSuchElementException: key not found: d
+  at scala.collection.immutable.Map$Map3.apply(Map.scala:170)
+  ... 28 elided
+
+scala> a('a')
+res3: Int = 1
+```
+
+- **添加与更新**： +，++ 和updated。
+- **移除**： -和--，移除对应元素。
+- **生成子集**： keys，keySet，keysIterator，valuesIterator，
+和values。它以各种形式分别返回Map的键和值。
+- **转换**： filterKeys和mapValues。通过过滤和转换现有Map的绑定来生成一个新的Map。
+
+在`Map特质`上的操作：
+|操作|操作含义|
+|--|:--|
+|**查找：**||
+|ms get k|获取键为k对应的值，匹配不到的返回None|
+|ms(k)|同上，找不到的键会抛出ket not found错误|
+|ms getOrElse (k, d)|如果k存在就返回k，否则返回默认值d|
+|ms contains k|ms是否包含k|
+|ms isDefinedAt k|同上|
+|**添加与更新**：||
+|ms + (k -> v)|返回ms所有的键值对和+号右边的键值对|
+|ms + (k -> v, l -> w)|同上|
+|ms ++ kvs|返回ms和新增键值对左右的元素|
+|ms updated (k, v)|同ms + (k -> v)|
+|**移除**：||
+|ms - k|返回移除键K的剩余元素|
+|ms - (k, l, m)|返回不包含k, l, m的剩余元素|
+|ms -- ks|移除多个键|
+|**子集**：||
+|ms.keys|返回Iterable类型的键的集合|
+|ms.keySet|返回所有键的集合|
+|ms.keysIterator|返回一个迭代器|
+|ms.values|返回Iterable类型的值的集合|
+|ms.valuesIterator|返回一个迭代器|
+|**转换**：||
+|ms filterKeys p|一个Map视图，只包含ms中键满足p的那些map|
+|ms mapValues f|将函数f应用于ms中与键相关联的每个值所产生的Map视图|
+
+在`可变Map特质`上的操作：
+|操作|操作含义|
+|--|:--|
+|**添加与更新**：||
+|ms(k) = v|添加从键k到值v的映射，作为一个副作用映射ms，覆盖k之前的任何映射|
+|ms += (k -> v)|增加从键k到值v的映射，将ms映射为一个副作用，并返回ms本身|
+|ms += (k -> v, l -> w)|将给定的映射作为副作用添加到ms，并返回ms本身|
+|ms ++= kvs|将kvs中的所有映射添加到ms中作为副作用，并返回ms本身|
+|ms put (k, v)|添加从键k到值v到ms的映射，并返回之前与k相关的任何值作为可选项|
+|ms getOrElseUpdate (k, d)|如果键k在ms中定义，返回它的相关值。否则，用映射k -> d更新ms并返回d|
+|**移除**：||
+|ms -= k|从ms中移除键k的映射，并返回ms本身|
+|ms -= (k, l, m)|从ms中删除带有给定键的映射，并返回ms本身|
+|ms --= ks|从ms中删除ks中的所有键作为副作用，并返回ms本身|
+|ms remove k|从ms中删除键为k的任何映射，并返回之前与k关联的任何值作为可选项|
+|ms retain p|在ms中只保留那些键满足谓词p的映射。|
+|ms.clear()|删除ms中的所有映射|
+|**转换与克隆**：||
+|ms transform f|将map ms中的所有相关值与函数f进行转换|
+|ms.clone|返回一个新的可变映射，其映射与ms相同|
+
+Map的添加和删除操作与集合的添加和删除操作是一致的。对于集合，可变映射还支持非破坏性的添加操作+、-和updated，但是它们的使用频率较低，因为它们涉及到可变映射的复制。相反，可变map m的更新通常会被“当场修改”，使用`m(key) = value`或`m += (key ->value)`。还有一个变体`m put (key, value)`，它返回一个Option值，其中包含先前与key关联的值，如果key在以前的映射中不存在，则返回None。
+
+getOrElseUpdate对于访问充当缓存的映射非常有用。如果调用函数f触发一个“昂贵”的计算：
+
+```scala
+def f(x: String) = {
+    println("taking my time."); Thread.sleep(100)
+    x.reverse
+}
+f: (x: String)String
+
+```
+
+进一步假设f没有副作用，所以用相同的参数再次调用它将总是产生相同的结果。在这种情况下，可以通过将以前计算的参数绑定和f的结果存储在映射中来节省时间，并且只有在没有找到参数的结果时才计算f的结果。可以说map是f计算的缓存。
+
+```scala
+scala> def f(x: String) = {
+     | println("taking my time."); Thread.sleep(100)
+     | x.reverse}
+f: (x: String)String
+
+scala> val cache = scala.collection.mutable.Map[String, String]()
+cache: scala.collection.mutable.Map[String,String] = Map()
+
+scala> def cachedF(s: String) = cache.getOrElseUpdate(s, f(s))
+cachedF: (s: String)String
+
+scala> cachedF("abc")
+taking my time.
+res0: String = cba
+
+scala> cachedF("abc")
+res1: String = cba
+```
+
+注意到，getOrElseUpdate的第二个参数只有一个键名，因此上面f(“abc”)的计算只在getOrElseUpdate需要第二个参数的值时执行，而这恰恰是在它的第一个参数没有在缓存映射中找到的情况下执行。您也可以直接实现cachedF，只使用基本的映射操作，但是这样做需要写更多的代码：
+
+```scala
+def cachedF(arg: String) = cache get arg match {
+  case Some(result) => result
+  case None =>
+    val result = f(arg)
+    cache(arg) = result
+    result
+}
+```
 
 ### 24.8 具体的不可变集合类
 
+Scala提供了许多具体的不可变集合类。它们实现的特征(映射、集合、序列)不同，它们是否可以无限，以及各种操作的速度不同。从回顾最常见的不可变集合类型开始。
+
 #### 24.8.1 列表(Lists)
+
+列表是有限不可变序列。它们提供对第一个元素以及列表的其余部分的常量时间访问，并且它们有常量时间的连接操作用于将新元素添加到列表的前面。
 
 #### 24.8.2 流(Streams)
 
+流类似于列表，不同之处在于它的元素是惰性计算的。因此，一条流可以无限长。只有那些被请求的元素才会被计算。否则，流具有与列表相同的性能特征。
+
+列表是用::操作符构造的，而流是用类似的#::构造的：
+
+```scala
+scala> val str = 1 #:: 2 #:: 3 #:: Stream.empty
+str: scala.collection.immutable.Stream[Int] = Stream(1, ?)
+```
+
+这个流的头是1， 尾部包含2和3，这里尾部没有被打印出来，因为还没有计算它们。流需要惰性地进行计算，流的toString方法小心翼翼地不强制进行任何额外计算。
+
+下面是一个更复杂的示例。它计算包含从给定的两个数字开始的斐波那契序列的流。斐波那契序列中的每个元素都是该序列中前两个元素的和：
+
+```scala
+scala> def fibFrom(a: Int, b: Int): Stream[Int] = {
+  a #:: fibFrom(b, a + b)
+}
+fibFrom: (a: Int, b: Int)Stream[Int]
+```
+
+这个函数看起来很简单。序列的第一个元素显然是a，序列的其余部分是斐波那契序列，从b开始，然后是a + b。棘手的部分是计算这个序列而不导致无限递归。如果函数使用::而不是#::，那么每次调用该函数都会导致另一次调用，从而导致无限递归。使用#::操作符右边的部分只有在被请求的时候才会参与计算。
+
+```scala
+scala> val fibs = fibFrom(1, 1).take(7)
+fibs: scala.collection.immutable.Stream[Int] = Stream(1, ?)
+
+scala> fibs.toList
+res11: List[Int] = List(1, 1, 2, 3, 5, 8, 13)
+```
+
+当处理列表的算法小心地只处理它们的头部时，列表是非常高效的。访问、添加和删除列表的头只需要常量时间，而稍后访问或修改列表中的元素所花费的时间与列表长度成线性关系。
+
 #### 24.8.3 向量(Vectors)
+
+向量是一种集合类型，可以有效地访问头部以外的元素。访问向量的任何元素只需要“有效常数时间”，如下所示。它比访问列表头或读取数组元素的常数要大，但它仍然是一个常数。因此，`使用向量的算法在访问序列的头部时不必非常小心。它们可以访问和修改任意位置的元素`，因此编写它们更加方便。
+
+```scala
+scala> val vec = scala.collection.immutable.Vector.empty
+vec: scala.collection.immutable.Vector[Nothing] = Vector()
+
+scala> val vec2 = vec :+ 1 :+ 2
+vec2: scala.collection.immutable.Vector[Int] = Vector(1, 2)
+
+scala> val vec3 = 100 +: vec2
+vec3: scala.collection.immutable.Vector[Int] = Vector(100, 1, 2)
+
+scala> vec3(0)
+res12: Int = 100
+```
+
+向量用宽而浅的树表示，每个树节点最多包含32个向量元素，或者最多包含32个其他树节点。包含最多32个元素的向量可以在单个节点中表示。包含最多32*32=1024个元素的向量可以用单个间接方式表示。对于最多有2\^15个元素的向量来说，从树的根到最后一个元素节点的2次跳跃就足够了，对于最多有2\^20个元素的向量来说，从树的根到最后一个元素节点的3次跳跃就足够了，2\^25元素的树需要4次跳跃，2\^30元素的树需要5次跳跃。
+
+因此，对于所有大小合理的向量，元素选择最多涉及5个基本数组选择。这就是我们写元素访问是`“有效常量时间”`时的意思。
+
+`向量是不可变的`，因此不能“当场修改”向量的元素。但是，使用updated方法可以创建一个新向量，只有一个元素与原有向量不同。
+
+```scala
+scala> val vec = Vector(1, 2, 3)
+vec: scala.collection.immutable.Vector[Int] = Vector(1, 2, 3)
+
+scala> vec updated (2, 4) //将第二个值更新为4，并返回一个新的向量
+res13: scala.collection.immutable.Vector[Int] = Vector(1, 2, 4)
+
+scala> vec //vec并没有改变
+res14: scala.collection.immutable.Vector[Int] = Vector(1, 2, 3)
+```
+
+如上面的最后一行所示，对updated的调用对原始向量vec没有影响。与选择一样，功能向量更新也是“有效的常量时间”。可以通过从树的根开始复制包含该元素的节点和指向该元素的每个节点来更新向量中间的元素。这意味着一个功能性更新将在1到5个节点之间创建，每个节点最多包含32个元素或子树。这当然比在可变数组中就地更新要“昂贵”，但仍然比复制整个向量“便宜”得多。
+
+因为向量在快速随机选择和快速随机函数更新之间取得了很好的平衡，所以它们目前是不可变索引序列的默认实现：
+
+```scala
+scala> collection.immutable.IndexedSeq(1, 2, 3)
+res15: scala.collection.immutable.IndexedSeq[Int] = Vector(1, 2, 3)
+```
 
 #### 24.8.4 不可变栈(Stacks)
 
