@@ -9535,9 +9535,9 @@ scala> vec3(0)
 res12: Int = 100
 ```
 
-向量用宽而浅的树表示，每个树节点最多包含32个向量元素，或者最多包含32个其他树节点。包含最多32个元素的向量可以在单个节点中表示。包含最多32*32=1024个元素的向量可以用单个间接方式表示。对于最多有2\^15个元素的向量来说，从树的根到最后一个元素节点的2次跳跃就足够了，对于最多有2\^20个元素的向量来说，从树的根到最后一个元素节点的3次跳跃就足够了，2\^25元素的树需要4次跳跃，2\^30元素的树需要5次跳跃。
+向量用宽而浅的树表示，每个树节点最多包含32个向量元素或者32个其他树节点。小于等于32个元素的向量可以在单个节点中表示。小于等于32*32=1024个元素的向量可以用单词额外的间接性来做到。如果允许从根部到最终的元素节点间有两跳(hop)，就可以表示多大2\^15个元素的向量，允许三跳可达2\^20个元素的向量等等。
 
-因此，对于所有大小合理的向量，元素选择最多涉及5个基本数组选择。这就是我们写元素访问是`“有效常量时间”`时的意思。
+因此，对于所有正常大小的向量，元素选择最多涉及5个基本数组选择。这就是我们写元素访问是`“从实效上讲的常量时间”`。
 
 `向量是不可变的`，因此不能“当场修改”向量的元素。但是，使用updated方法可以创建一个新向量，只有一个元素与原有向量不同。
 
@@ -9563,49 +9563,287 @@ res15: scala.collection.immutable.IndexedSeq[Int] = Vector(1, 2, 3)
 
 #### 24.8.4 不可变栈(Stacks)
 
+如果需要一个先进后出的序列，可以使用Stack，可以使用push压入一个元素，使用pop来弹出一个元素，以及使用top来查看栈顶的元素，这些操作都是常量时间。
+
+```scala
+scala> val stack = scala.collection.immutable.Stack.empty
+stack: scala.collection.immutable.Stack[Nothing] = Stack()
+
+scala> val hasOne = stack.push(1)
+hasOne: scala.collection.immutable.Stack[Int] = Stack(1)
+
+scala> stack
+res0: scala.collection.immutable.Stack[Nothing] = Stack()
+
+scala> hasOne.pop
+res1: scala.collection.immutable.Stack[Int] = Stack()
+
+scala> hasOne.top
+res2: Int = 1
+```
+
+不可变的栈很少使用，因为它的功能被列表替代了，对于不可变栈的push与列表的::操作相同，而对于栈的pop操作等同于列表的tail。
+
 #### 24.8.5 不可变队列(Queues)
+
+队列和栈的实现比较类似，但队列是先进先出的结构：
+
+```scala
+scala> val empty = scala.collection.immutable.Queue[Int]()
+empty: scala.collection.immutable.Queue[Int] = Queue()
+
+scala> val has1 = empty.enqueue(1) //添加一个元素
+has1: scala.collection.immutable.Queue[Int] = Queue(1)
+
+scala> val has123 = has1.enqueue(List(2, 3)) //添加多个元素
+has123: scala.collection.immutable.Queue[Int] = Queue(1, 2, 3)
+
+scala> val (elem, has23) = has123.dequeue  //移除元素
+elem: Int = 1
+has23: scala.collection.immutable.Queue[Int] = Queue(2, 3)
+```
+
+`dequeue返回的是一组包含被移除元素以及队列剩余元素的对偶`。
 
 #### 24.8.6 区间(Ranges)
 
-#### 24.8.7 哈希树
+区间是一组有序的整数序列，整数之间有相同的间隔。用Scala创建Range的方式是使用预定义的方法to和by：
+
+```scala
+scala> 1 to 3
+res3: scala.collection.immutable.Range.Inclusive = Range 1 to 3
+
+scala> 5 to 14 by 3 //间隔为3
+res4: scala.collection.immutable.Range = Range 5 to 14 by 3
+
+scala> 1 until 13
+res5: scala.collection.immutable.Range = Range 1 until 13
+```
+
+`区间的内部表示占据常量的空间`，因为它可以使用三个数表示：`起始值、终值和步长`。因此，大多数区间操作都很快。
+
+#### 24.8.7 哈希字典树
+
+哈希字典树是实现高效的不可变映射和不可变集的标准方式。它们的内部表现形式和向量类似。它们也是每个节点都有32个元素或者32个子树的树，不过`元素的选择是基于哈希码`的。例如，要找出映射中给定的键，首先用哈希码的最低5位来找到第1颗子树，用接下来的5位找到第2颗子树，以此类推，当某个节点所有元素的哈希码（已用到的部分）各不相同时，这个选择过程就停止了，因此并不是必须用到哈希码的所有位。
+
+哈希字典树在比较快的查找和比较高效的函数式插入（+）和删除（-）之间找到了一个平衡，这就是Scala对不可变映射和不可变集的默认实现的基础。
 
 #### 24.8.9 红黑树
 
-#### 24.8.10 不可变点集
+红黑树是一种平衡的二叉树，某些节点被标记为“红”，而其他节点被标记为“黑”的，跟其他平衡二叉树一样，对它们的操作可以可靠地与树规模相关的对数时间内完成。
 
-#### 24.8.11 List maps
+Scala提供了内部使用的红黑树的集和映射的实现，可以用TreeSet和TreeMap来访问它们：
+
+```scala
+scala> val set = scala.collection.immutable.TreeSet.empty[Int]
+set: scala.collection.immutable.TreeSet[Int] = TreeSet()
+
+scala> set + 1 + 3 + 3
+res10: scala.collection.immutable.TreeSet[Int] = TreeSet(1, 3)
+```
+
+`红黑树是Scala中SortedSet的标准实现`，因为它们提供了按顺序返回集的所有元素的一个高效迭代器。
+
+#### 24.8.10 不可变位组
+
+位组用来表示某个更大整数的为的小整数的集合。例如，包含3、2和0的位组可以用二进制的整数1101表示，转换成十进制就是13。
+
+从内部讲，位组使用的是一个64位Long的数组，数组中的第一个Long表示0到63的整数，第2个Long表示64到127的整数，以此类推。因此只要位组中最大的整数小于数百这个规模，位组都会非常紧凑。
+
+对位组的操作非常快，测试某个位组师傅包含某个值只需要常量的时间。往位组中添加条目需要的时间跟位组的Long数组长度整整比，这通常是一个非常小的值：
+
+```scala
+scala> val bits = scala.collection.immutable.BitSet.empty
+bits: scala.collection.immutable.BitSet = BitSet()
+
+scala> val moreBits = bits + 3 + 4 + 4
+moreBits: scala.collection.immutable.BitSet = BitSet(3, 4)
+
+scala> moreBits(3)
+res11: Boolean = true
+
+scala> moreBits(0)
+res12: Boolean = false
+```
+
+#### 24.8.11 列表映射
+
+列表映射将映射表示为一个由键值对组成的链表。一般而言，对列表映射的操作需要遍历整个列表。因此，对列表映射的操作耗时跟映射的规模成正比。
+
+事实上，`Scala很少使用映射列表`，因为`标准的不可变映射几乎总是比列表映射更快`，唯一可能有区别的场景是当映射应为某种原因需要`经常访问列表中的首个元素`时，频率远高于访问其他元素。
+
+```scala
+scala> val map = collection.immutable.ListMap(1 -> "one", 2 -> "two")
+map: scala.collection.immutable.ListMap[Int,String] = ListMap(1 -> one, 2 -> two)
+
+scala> map(2)
+res13: String = two
+```
 
 ### 24.9 具体的可变集合类
 
 #### 24.9.1 数组缓冲
 
+数组缓冲包含一个数组和一个大小。对数组缓冲的大部分操作都跟数组的速度一样。这些操作只是简单地访问和修改底层数组。数组缓冲可以高效的添加元素，对数组缓冲追加元素需要的时间为平摊的常量时间。数组缓冲对于那些通过往喂不添加新元素来高效构建大集合的场景而言非常有用。
+
 #### 24.9.2 列表缓冲
+
+和数组缓冲类似，只不过内部使用的是链表而不是数组，如果打算在构建完成后将缓冲转换为列表，就使用列表缓冲。
 
 #### 24.9.3 字符串构建器
 
+正如数组缓冲有助于构建数组，列表缓冲有助于构建列表，字符串构建器有助于构建字符串。由于字符串构建器非常有用，它们已经被引入到默认的命名空间当中。只需要简单的使用`new StringBuilder`来创建即可：
+
+```scala
+scala> val buf = new StringBuilder
+buf: StringBuilder =
+
+scala> buf += 'a'
+res14: buf.type = a
+
+scala> buf += 'b'
+res15: buf.type = ab
+```
+
 #### 24.9.4 链表
+
+`链表是由用next指针链接起来的节点组成的可变序列`。在大多数语言中，null会被用于空链表，但是在Scala中行不通，因为即便是空的序列也需要支持所有的序列方法。尤其是LinkedList.empty.isEmpty应该返回true而不是抛出NullPointerException。`空链表因此也是特殊处理的：它们的next字段指向节点自己`。
+
+跟它的不可变版本一样，链表支持的最佳的操作是顺序操作。不仅如此，在链表中插入元素或其他链表十分容易。
 
 #### 24.9.5 双向链表
 
+DoubleLinkedList比链表多了一个前向指针prev，指向当前节点的前一个元素，这个额外的链接的主要好处是让它移除元素的操作非常快。
+
 #### 24.9.6 可变列表
+
+MutableList由一个单向链表和一个执行该列表末端的空节点组成。这使得往列表尾部的追加操作是一个常量时间的，因为它免除了遍历列表来找到末端的需要。MutableList目前是Scala的mutable.LinearSeq的标准实现。
 
 #### 24.9.7 队列
 
+与不可变队列类似，不过不是用enqueue而是用+=和++=来追加元素。另外对于可变队列而言，dequeue方法只会简单滴移除头部的元素并返回。参考下面例子：
+
+```scala
+scala> val queue = new scala.collection.mutable.Queue[String]
+queue: scala.collection.mutable.Queue[String] = Queue()
+
+scala> queue += "a"
+res17: queue.type = Queue(a)
+
+scala> queue ++= List("b", "c")
+res18: queue.type = Queue(a, b, c)
+
+scala> queue.dequeue
+dequeue   dequeueAll   dequeueFirst
+
+scala> queue.dequeue
+res19: String = a
+
+scala> queue
+res20: scala.collection.mutable.Queue[String] = Queue(b, c)
+```
+
 #### 24.9.8 数组序列
+
+数组序列是固定大小的，内部使用Array[AnyRef]来存放其元素的可变序列。Scala中的实现是ArraySeq类。
 
 #### 24.9.9 栈
 
+与不可变栈类似，可变栈的修改是当场发生的，在Scala 2.12中被弃用。
+
+```scala
+scala> val stack = new scala.collection.mutable.Stack[Int]
+<console>:11: warning: class Stack in package mutable is deprecated (since 2.12.0): Stack is an inelegant and potentially poorly-performing wrapper around List. Use a List assigned to a var instead.
+       val stack = new scala.collection.mutable.Stack[Int]
+                                                ^
+stack: scala.collection.mutable.Stack[Int] = Stack()
+```
+
 #### 24.9.10 数组栈
+
+ArrayStack是可变栈的另一种实现，内部是一个Array，在需要时重新改变大小。他提供了快速的下标索引，一般而言对于大多数操作都比可变栈更快。
 
 #### 24.9.11 哈希表
 
-#### 24.9.12 弱哈希Maps
+哈希表底层用数组存放其元素，元素的存放位置取决于该元素的哈希码。往哈希表添加元素只需要常量时间，只要数组中没有其他元素拥有相同的哈希码。因此，只要哈希表中的对象能够按哈希码分布的足够均匀，哈希操作就会非常快。正因为如此，Scala中默认的可变映射和可变集的实现都是基于哈希码表的。
 
-#### 24.9.13 并发Maps
+哈希集和哈希映射用起来和其他集或映射一样：
 
-#### 24.9.14 可变点集
+```scala
+scala> val map = collection.mutable.HashMap.empty[Int, String]
+map: scala.collection.mutable.HashMap[Int,String] = Map()
+
+scala> map += (1 -> "make a web site")
+res21: map.type = Map(1 -> make a web site)
+
+scala> map += (3 -> "profit!")
+res22: map.type = Map(1 -> make a web site, 3 -> profit!)
+
+scala> map(1)
+res23: String = make a web site
+
+scala> map contains 2
+res24: Boolean = false
+```
+
+对哈希表的便利并不保证按照某个特定的顺序，遍历只不过是简单地遍历底层的数组。如果想要保证迭代顺序，可以用链式的哈希映射或哈希集，而不是常见的哈希映射或哈希集。
+
+#### 24.9.12 弱哈希映射
+
+弱哈希映射是一种特殊的哈希映射，对这种哈希映射，垃圾收集器并不会跟踪映射到其中的键的链接。这意味着`如果没有其他引用指向某个键，那么该键到它的关联就会从映射中消失`。
+
+弱哈希映射对于类似缓存这样的任务而言十分有用，即使你想要重用某个耗时计算的函数结果的场景。如果这些代表入参的键和函数结果是保存在常规的哈希映射当中的，这个映射就会无限增长，所有的键都不会被当做垃圾处理。使用弱哈希映射就会避免这个问题。一旦某个键对象不再可及，该条目就会从弱哈希表中移除。Scala中弱哈希的实现是对底层Java实现java.util.WeakhashMap的包装。
+
+#### 24.9.13 并发映射
+
+并发映射可以被多个线程同时访问，除了常见的Map操作外，还提供如下原子操作：
+
+|操作|操作含义|
+|--|--|
+|m putIfAbsent (k, v)|如果k不存在，则添加(k, v)|
+|m remove (k, v)|移除该条目|
+|m replace (k, old, new)|如果k原先绑定old，则将关联更新为new|
+|m replace (k, v)|将k的关联更新为v|
+
+ConcurrentHashMap是Scala标准类库中的一个特质。目前它的唯一实现是Java的java.util.concurrentHashMap，通过标准的Java/Scala集合转换，可以自动转换成Scala映射。
+
+#### 24.9.14 可变位组
+
+可变位组和不可变位组类似，只不过它可以当场被修改。可变位组在更新方法比不可变位组稍微高效一点，因为它们不需要将那些没有改变的Long来回复制。参考下面例子：
+
+```scala
+scala> val bits = scala.collection.mutable.BitSet.empty
+bits: scala.collection.mutable.BitSet = BitSet()
+
+scala> bits += 1
+res25: bits.type = BitSet(1)
+
+scala> bits += 3
+res26: bits.type = BitSet(1, 3)
+
+scala> bits
+res27: scala.collection.mutable.BitSet = BitSet(1, 3)
+```
 
 ### 24.10 数组
+
+数组在Scala中是一种特殊的集合。一方面Scala的数组跟Java的数组一一对应，`Array[int]`对应于`int[]`，`Array[String]`对应于`String[]`等等，另一方面，Scala数组提供了比Java更多的功能。首先，`Scala数组支持泛型`其次，Scala数组跟Scala的序列兼容（可以在要求`Seq[T]`的地方传入`Array[T]`），最后，Scala数组还支持所有的序列操作：
+
+```scala
+scala> val a1 = Array(1, 2, 3)
+a1: Array[Int] = Array(1, 2, 3)
+
+scala> val a2 = a1 map(_ * 3)
+a2: Array[Int] = Array(3, 6, 9)
+
+scala> val a3 = a2 filter (_ % 2 != 0)
+a3: Array[Int] = Array(3, 9)
+
+scala> a3.reverse
+res28: Array[Int] = Array(9, 3)
+```
+
+Scala的
 
 ### 24.11 字符串
 
