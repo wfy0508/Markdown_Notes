@@ -9892,6 +9892,56 @@ scala> intArrayOps(a1).reverse
 res33: Array[Int] = Array(3, 2, 1)
 ```
 
+这就带来一个问题，编译器是如何选中了intArrayOps而不是另一个到WrappedArray的隐式转换呢？毕竟，这两个隐式转换都可以将数组映射成一个支持reverse方法的类型。答案就是：`这两个隐式转换之前存在优先级`，ArrayOps转换的优先级要高于WrappedArray转换，前者定义在Predef对象中，而后者定义在scala.LowPriorityImplicits类中，这个类时Predef的超类。`子类和子对象中的隐式转换比基类的隐式转换优先级更高`，因此如果两个隐式转换同时可用，编译器会选择Predef中的那一个。
+
+数组与序列是兼容的，支持所有的序列操作，不过泛型呢？在Java中你没法写出`T[]`，那么Scala的`Array[T]`有时如何表示的呢？事实上，像`Array[T]`这样的泛型数组在运行时可以使任何Java支持的8中基本类型的数组`byte[], short[], char[], int[], long[], float[], double[], boolean[]`，也可以是对象的数组，`唯一能跨越这些类型的公共运行期类型是AnyRef`，因此这就是Scala将`Array[T]`映射到的类型。
+
+在运行时，档类型为Array[T]的数组的元素被访问或者被更新时，有一系列的类型检查来决定实际的数组类型，然后才是对Java数组的正确操作。类型检查比较消耗时间，在满足性能要求前提下，尽量使用类型确定的数组，而不是泛型数组。
+
+仅仅能够表示泛型数组的类型还不够，还需要以某种方式来创建泛型数组，这个问题更加困难，首先尝试创建数组：
+
+```scala
+def evenElems[T](xs: Vector[T]): Array[T] = {
+  val arr = new Array[T]((xs.length + 1) / 2)
+  for (i <- 0 until xs.length by 2)
+    arr(i / 2) = xs(i)
+  arr
+}
+
+<pastie>:12: error: cannot find class tag for element type T
+  val arr = new Array[T]((xs.length + 1) / 2)
+            ^
+```
+
+编译器抛出错误信息，对于T类型找不到tag类。evenElems定义了返回类型与入参的类型一致，基于参数类型T的实际类型，可能为Array[Int]也可能为Array[Boolean]，这些类型在运行时表现各不相同，Scala不能确定T的实际类型，因为与类型参数T相对应的实际类型在运行时被擦除了，这就是编译器为什么会抛出一个错误信息。
+
+
+在许多情况下，编译器都可以自行生成类标签，对于具体类型Int或String就是如此，对于某些泛型类型比如List[T]也是如此，有足够多的信息已知，可以预测被擦除的类型，在本例中这个被擦除的类型是List。
+
+实际上编译器需要提供关于evenElems实际的参数类型是什么的运行时线索，这个线索的表现形式是类型为scala.reflact.ClassTag的`类标签(class tag)`。类标签描述是给定类型**被擦除的类型**，这也是构造该类型的数组需要的全部信息。
+
+```scala
+import scala.reflact.ClassTag
+def evenElems[T: ClassTag](xs: Vector[T]): Array[T] = {
+  val arr = new Array[T]((xs.length + 1) / 2)
+  for (i <- 0 until xs.length by 2)
+    arr(i / 2) = xs(i)
+  arr
+}
+
+evenElems: [T](xs: Vector[T])(implicit evidence$1: scala.reflect.ClassTag[T])Array[T]
+```
+
+在新定义当中，当Array[T]被创建时，编译器会查找类型参数T的类标签，也就是说，它会查找一个类型为ClassTag[T]的隐式值。如果找到这样的值，类标签就被用于构造正确类型的数组，不然就会报错。
+
+```scala
+scala> evenElems(Vector(1, 2, 3, 4, 5))
+res34: Array[Int] = Array(1, 3, 5)
+
+scala> evenElems(Vector("this", "is", "a", "test", "run"))
+res35: Array[String] = Array(this, a, run)
+```
+
 ### 24.11 字符串
 
 ### 24.12 性能特征
