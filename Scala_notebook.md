@@ -9843,7 +9843,54 @@ scala> a3.reverse
 res28: Array[Int] = Array(9, 3)
 ```
 
-Scala的
+Scala的数组使用Java的数组来表示的，Scala数组是怎么支持这些功能的？答案是`隐式转换`，数组并不能假装是序列，因为原生数组的数据类型表示并不是序列的子类型，每当使用数组被用作序列，都会被隐式地转换为Seq的子类。这个子类的名称为`scala.collection.mutable.WrappedArray`，如下：
+
+```scala
+scala> val seq: Seq[Int] = a1
+seq: Seq[Int] = WrappedArray(1, 2, 3)
+
+scala> val a4: Array[Int] = seq.toArray
+a4: Array[Int] = Array(1, 2, 3)
+
+scala> a1 eq a4
+res29: Boolean = true
+```
+
+从上面看出，有一个从Array到WrappedArray的隐式转换，如果要反过来，从WrappedArray转换为Array，可以用Traverable中定义的toArray方法，经过两个转换之后的数组跟一开始是相同的数组。
+
+可以被应用到数组的还有另一个隐式转换，这个转换只是`简单地将所有序列的方法“添加”到数组`，但并不将数组本身变成序列。“添加”意味着数组被包装成另一个类型为ArrayOps的对象，这个对象支持所有的序列方法，通常这个ArrayOps对象的生命周期很短：`它通常在调用序列方法之后就不再被访问了`，因此其存储空间可以被回收。现代的VM会完全避免创建这个对象。
+
+这两种隐式转换的区别可以通过下面例子展现出来：
+
+```scala
+scala> val seq: Seq[Int] = a1
+seq: Seq[Int] = WrappedArray(1, 2, 3)
+
+scala> seq.reverse
+res30: Seq[Int] = WrappedArray(3, 2, 1)
+
+scala> val ops: collection.mutable.ArrayOps[Int] = a1
+ops: scala.collection.mutable.ArrayOps[Int] = [I(1, 2, 3)
+
+scala> ops.reverse
+res31: Array[Int] = Array(3, 2, 1)
+```
+
+对Seq调用reverse返回的类型是WrappedArray，并没有发生变化，这合乎逻辑，因为被包装的数组是Seq，而对任何Seq调用reverse都会返回Seq，而对ArrayOps调用reverse返回的是Array而不是Seq。
+
+上例仅仅展示了Array和WrappedArray的关系，通常从来都不用定义一个ArrayOps，只需要对数组调用Seq方法即可：
+
+```scala
+scala> a1.reverse
+res32: Array[Int] = Array(3, 2, 1)
+```
+
+`隐式转换会自动插入ArrayOps对象`，因此上面这行代码和下面的代码是等效的，其中intArrayOps就是那个被自动插入的隐式转换：
+
+```scala
+scala> intArrayOps(a1).reverse
+res33: Array[Int] = Array(3, 2, 1)
+```
 
 ### 24.11 字符串
 
