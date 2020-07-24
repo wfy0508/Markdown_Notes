@@ -9915,7 +9915,6 @@ def evenElems[T](xs: Vector[T]): Array[T] = {
 
 编译器抛出错误信息，对于T类型找不到tag类。evenElems定义了返回类型与入参的类型一致，基于参数类型T的实际类型，可能为Array[Int]也可能为Array[Boolean]，这些类型在运行时表现各不相同，Scala不能确定T的实际类型，因为与类型参数T相对应的实际类型在运行时被擦除了，这就是编译器为什么会抛出一个错误信息。
 
-
 在许多情况下，编译器都可以自行生成类标签，对于具体类型Int或String就是如此，对于某些泛型类型比如List[T]也是如此，有足够多的信息已知，可以预测被擦除的类型，在本例中这个被擦除的类型是List。
 
 实际上编译器需要提供关于evenElems实际的参数类型是什么的运行时线索，这个线索的表现形式是类型为scala.reflact.ClassTag的`类标签(class tag)`。类标签描述是给定类型**被擦除的类型**，这也是构造该类型的数组需要的全部信息。
@@ -9942,13 +9941,186 @@ scala> evenElems(Vector("this", "is", "a", "test", "run"))
 res35: Array[String] = Array(this, a, run)
 ```
 
+在这两种情况下，Scala编译器都自动为元素类型构建出类标签（首先是Int然后是String）并将它传入evenElems的隐式参数。对于所有具体类型，编译器都可以帮我们完成，但是如果入参本身是另一个参数类型而不带类标签，编译器就无能为力了，比如下面这段代码：
+
+```scala
+scala> def wrap[U](xs: Vector[U]) = evenElems(xs)
+<console>:14: error: No ClassTag available for U
+       def wrap[U](xs: Vector[U]) = evenElems(xs)
+                                             ^
+
+scala> def wrap[U: ClassTag](xs: Vector[U]) = evenElems(xs)
+wrap: [U](xs: Vector[U])(implicit evidence$1: scala.reflect.ClassTag[U])Array[U]
+```
+
+第一个定义报错的原因是evenElems要求类型参数U的类标签，但是没有找到。解决方案就是第二个要求针对U的隐式类标签。`U定义中的上下文界定只不过是此处名为evidence$1，类型为ClassTag[U]的隐式参数的简写`。
+
 ### 24.11 字符串
+
+跟数组一样，字符串也不直接是序列，但是它们可以转换为序列，因而支持序列的所有操作。
+
+```scala
+scala> val str = "hello"
+str: String = hello
+
+scala> str.reverse
+res0: String = olleh
+
+scala> str.map(_.toUpper)
+res1: String = HELLO
+
+scala> str drop 3
+res2: String = lo
+
+scala> str slice (1, 4)
+res3: String = ell
+
+scala> val s: Seq[Char] = str
+s: Seq[Char] = hello
+```
 
 ### 24.12 性能特征
 
+正如前面的解释所示，不同的集合类型具有不同的性能特征。这通常是选择一种集合类型而不是另一种集合类型的主要原因。您可以看到集合上一些常见操作的性能特征，总结在两个表中：
+
+序列类型的性能特征:
+
+||head|tail|apply|update|prepend|append|insert|
+|--|--|--|--|--|--|--|--|
+|**immutable**|
+|List|C|C|L|L|C|L|-|
+|Stream|C|C|L|L|C|L|-|
+|Vector|eC|eC|eC|eC|eC|eC|-|
+|Stack|C|C|L|L|C|L|-|
+|Queue|aC|aC|L|L|L|C|-|
+|Range|C|C|C|-|-|-|-|
+|String|C|L|C|L|L|L|-|
+|**mutable**||||||||
+|ArrayBuffer|C|L|C|C|L|aC|L|
+|ListBuffer|C|L|L|L|C|C|L|
+|StringBuilder|C|L|C|C|L|aC|L|
+|MutableList|C|L|L|L|C|C|L|
+|Queue|C|L|L|L|C|C|L|
+|ArraySeq|C|L|C|C|-|-|-|
+|Stack|C|L|L|L|C|L|L|
+|ArrayStack|C|L|C|C|aC|L|L|
+|Array|C|L|C|C|-|-|-|
+
+集合和映射类型的性能特征:
+
+||lookup|add|remove|min|
+|--|--|--|--|--|
+|**immutable**|||||
+|HashSet/HashMap|eC|eC|eC|L|
+|TreeSet/TreeMap|Log|Log|Log|Log|
+|BitSet|C|L|L|eC^a^|
+|ListMap|L|L|L|L|
+|**mutable**|||||
+|HashSet/HashMap|eC|eC|eC|L|
+|WeakHashMap|eC|eC|eC|L|
+|BitSet|C|aC|C|eC^a^|
+
+其中：
+
+- `C`：操作消耗常量时间
+- `eC`：该操作需要的时间实际上是常数，但这可能取决于一些假设，如向量的最大长度或散列键的分布
+- `aC`：这个操作`平摊常数时间`。一些操作的调用可能会花费更长的时间，但是如果许多操作平均执行，每个操作只花费常数时间
+- `Log`：操作消耗对数时间
+- `L`：操作消耗时间与大小正正比
+- `-`：不支持该操作
+
 ### 24.13 相等性
 
+集合库对于相等和散列有统一的方法。首先，将集合划分为集合、映射和序列。`不同的集合类别之间总是不相等的`，比如Set(1, 2, 3)不等同于List(1, 2, 3)，即使它们包含相同的元素。另一方面，`在同一类别中，如果当且仅当集合具有相同的元素(对于序列:相同顺序的相同元素)，则集合是相等的`，例如List(1, 2, 3) == Vector(1, 2, 3)和HashSet(1, 2) == TreeSet(2, 1)。
+
+对于相等性检查来说，集合是可变的还是不可变的并不重要。对于可变集合，相等性仅仅取决于执行相等性测试时的当前元素。这意味着可变集合可能等于不同时间的不同集合，这取决于添加或删除了什么元素。当使用可变集合作为散列映射中的键时，这是一个潜在的陷阱。
+
+```scala
+scala> import scala.collection.mutable.{HashMap, ArrayBuffer}
+import scala.collection.mutable.{HashMap, ArrayBuffer}
+
+scala> val buf = ArrayBuffer(1, 2, 3)
+buf: scala.collection.mutable.ArrayBuffer[Int] = ArrayBuffer(1, 2, 3)
+
+scala> val map = HashMap(buf -> 3)
+map: scala.collection.mutable.HashMap[scala.collection.mutable.ArrayBuffer[Int],Int] = Map(ArrayBuffer(1, 2, 3) -> 3)
+
+scala> map(buf)
+res4: Int = 3
+
+scala> buf(0) += 1
+
+scala> map(buf)
+java.util.NoSuchElementException: key not found: ArrayBuffer(2, 2, 3)
+  at scala.collection.MapLike.default(MapLike.scala:235)
+  at scala.collection.MapLike.default$(MapLike.scala:234)
+  at scala.collection.AbstractMap.default(Map.scala:63)
+  at scala.collection.mutable.HashMap.apply(HashMap.scala:69)
+  ... 28 elided
+```
+
+在本例中，最后一行的选择很可能会失败，因为数组xs的哈希码在倒数第二行发生了更改。因此，基于哈希代码的查找将查看与存储xs的位置不同的位置。
+
 ### 24.14 视图
+
+集合有很多构造新集合的方法。例如map、filter和++。我们称这种方法为转换器，因为它们至少接受一个集合作为接收对象，并在其结果中生成另一个集合。
+
+转换器的实现方式主要有两种：`严格模式`和`惰性模式`。严格模式的转换器使用它的所有元素构造一个新的集合。惰性转换器仅为结果集合构造一个代理，其元素是按需构造的。
+
+作为一个非严格转换器的示例，请考虑一个延迟映射操作的简单策略：
+
+```scala
+def lazyMap[T, U](coll: Iterable[T], f: T => U) = {
+  new Iterable[U]{
+    def iterator = coll.iterator map f
+  }
+}
+
+lazyMap: [T, U](coll: Iterable[T], f: T => U)Iterable[U]
+```
+
+注意，lazyMap构造了一个新的迭代器，而没有遍历给定集合coll的所有元素。相反，给定的函数f会在新集合迭代器的元素需要时才被调用。
+
+默认情况下，Scala集合在其所有转换器中都是严格的，Stream除外，后者延迟地实现其所有转换器方法。但是，有一种系统的方法可以将每个集合变为惰性集合，或者反过来也可行，就是基于视图。视图是一种特殊的集合，它能表示一些基本集合，但是延迟地实现它的所有转换器。
+
+要从集合转到它的视图，可以使用集合上的`view`方法。如果xs是某个集合，那么`xs.view`是相同的集合，但是所有转换器都是惰性实现的。要从视图返回到严格模式集合，可以使用`force`方法。
+
+举个例子，假设你有一个Ints向量，想在这个向量上连续映射两个函数:
+
+```scala
+scala> val v = Vector(1 to 10: _*)
+v: scala.collection.immutable.Vector[Int] = Vector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+
+scala> v map(_ + 1) map(_ * 2)
+res7: scala.collection.immutable.Vector[Int] = Vector(4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+```
+
+在最后一条语句中，表达式`v map(_ + 1)`构造了一个新的向量，然后在第二次调用`map(_ * 2)`时将其转换为第三个向量。在许多情况下，从第一次映射调用构造中间结果有点浪费。在这个伪示例中，使用两个函数`(_ + 1)`和`(_ * 2)`组成一个映射会更快。
+
+如果这两个函数在同一位置可用，则可以手动完成此操作。但通常，数据结构的连续转换是在不同的程序模块中完成的。融合这些转换将破坏模块化。避免中间结果的一种更一般的方法是首先将向量转换为视图，对视图应用所有转换，最后将视图强制转换为向量:
+
+```scala
+scala> (v.view map(_ + 1) map(_ * 2)).force
+res12: Seq[Int] = Vector(4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+
+scala> val vv = v.view
+vv: scala.collection.SeqView[Int,scala.collection.immutable.Vector[Int]] = SeqView(...)
+```
+
+v.view操作会返回一个SeqView，一个延迟计算的Seq。SeqView有两个类型参数，第一个是Int，代表元素的类型；第二个是scala.collection.immutable.Vector[Int]，代表视图转回向量的类型构造器。
+
+```scala
+scala> vv map(_ + 1)
+res13: scala.collection.SeqView[Int,Seq[_]] = SeqViewM(...)
+
+scala> res13 map(_ * 2)
+res14: scala.collection.SeqView[Int,Seq[_]] = SeqViewMM(...)
+
+scala> res14.force
+res15: Seq[Int] = Vector(4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+```
+
+使用前两个map操作返回的都是SeqViewM，这本质上是一个包装器，它记录了一个带有函数`(_ + 1)`的映射需要应用到向量v上的事实。
 
 ### 24.15 迭代器
 
