@@ -1970,7 +1970,7 @@ two
 three
 ```
 
-在函数内部，重复参数的的类型为参数声��类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
+在函数内部，重复参数的的类型为参数声���类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
 
 ```scala
 scala> val arr = Array("One", "Two", "Three")
@@ -7328,7 +7328,7 @@ abstract class Dollar extends AbstractCurrency{
 }
 ```
 
-这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现这���个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
+这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现������个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
 
 ```scala
 def +(that: Currency): Currency = new Currency{
@@ -8969,7 +8969,7 @@ Scala自带一个强大而优雅的集合类库，尽管这些集合API看上去
 
 ### 24.1 可变与不可变集合
 
-所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找到。大��数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
+所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找��。大��数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
 
 - scala.collection.immutable包中的集合对所有人都是不可变的，无论怎么访问都会交出相同元素的集合。
 
@@ -10112,20 +10112,334 @@ v.view操作会返回一个SeqView，一个延迟计算的Seq。SeqView有两个
 ```scala
 scala> vv map(_ + 1)
 res13: scala.collection.SeqView[Int,Seq[_]] = SeqViewM(...)
+```
 
+返回SeqViewM，这本质上是一个记录了一个带有函数`(_ + 1)`的map操作需要被应用到向量v的包装器，不过它并不会在视图被强转之前应用这个map操作。名称中SeqView后面的“M”表示该视图封装了一个map操作，还有其他字母用于标识其他延迟的操作。例如，“S”标识一个延迟的slice操作，而“R”标识一个reverse。
+
+```scala
 scala> res13 map(_ * 2)
 res14: scala.collection.SeqView[Int,Seq[_]] = SeqViewMM(...)
+```
 
+经过这个操作后，打印出来两个“M”：SeqViewMM，这得到的是一个包含了两次map操作的SeqView。
+
+```scala
 scala> res14.force
 res15: Seq[Int] = Vector(4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
 ```
 
-使用前两个map操作返回的都是SeqViewM，这本质上是一个包装器，它记录了一个带有函数`(_ + 1)`的映射需要应用到向量v上的事实。
+作为force操作的一部分，两个被保存的函数得以应用，新的向量被构造出来，通过这种方式，并不需要中间的数据结构。
+
+需要注意的是，最后的结果类型是一个Seq，而不是Vector。通过追踪类型变化可以看到，当第一次延迟的mao被应用是，结果的静态类型就是`SeqView[Int, Seq[_]]`，也就是说，类型系统对于视图被应用到具体的序列类型Vector这件事的“认知”丢失了。对于任何特定的视图的实现都要求大量的代码。因此，Scala集合类库几乎只对一般化的集合类型而不是具体的实现提供视图支持（数组例外，对数组的延迟操作会得到静态为Array的结果）。
+
+采用视图有两个原因，`首先是性能`，使用视图避免了中间结果的产生，节约开销，`其次是针对可变序列`，这类视图的许多变化函数提供了对原始序列的一个窗口，可以用来可选择地对该序列的某些元素进行更新：
+
+```scala
+val arr = (0 to 9).toArray
+val subarr = arr.view.slice(3, 6)
+
+def negate(xs: collection.mutable.Seq[Int]) = {
+  for (i <- 0 until xs.length) xs(i) = -xs(i)
+}
+
+negate(substr) //只更新了位置3到位置5的元素
+}
+```
+
+看过视图的使用过后，可能好奇为什么还要求严格求值得集合呢？原因之一是性能的比较并非总是偏爱惰性求值的集合，`对于小型集合而言，组织视图和应用闭包的额外开销通常打过免去中间数据结构的收益`。`可能更重要的原因是如果延迟操作有副作用`，对视图的求值可能会变得给常令人困惑。
+
+比如，在Scala2.8之前，Range类型是惰性的，因为其行为从效果上跟视图很像，当创建这样一个actors时：
+
+```scala
+val actors = for (0 <- 1 to 10) yield actor{...}
+```
+
+在这之后actor并没有被执行，因为Range是惰性的。所以为了避免这样的问题，Scala从2.8开始除了流之外的所有几何都是严格求值的。`从严格求值的集合到惰性求值的唯一方式是通过view方法，反过来唯一的方式是force方法`。
+
+总的来说，视图是一个调和效率和模块化之间矛盾的强大工具。使用视图应该局限于两个场景：
+
+- 在集合变换没有副作用的纯函数式的代码中应用视图；
+- 对所有的修改都是显式执行的可变集合使用视图。
+
+最好`避免既在创建新的集合又有副作用的场景下混用视图和各种集合操作`。
 
 ### 24.15 迭代器
 
-#### 24.15.1 缓冲迭代器
+迭代器并不是集合，而是逐个访问集合元素的一种方式。迭代器it的两个基本操作是`next`个`hasNext`。`it.next()`的调用返回迭代器的下一个元素并将迭代器的状态往前推进一步，如果没有更多的元素可以返回，那么对next操作会抛出`NoSuchElementException`。可以用Iterator的hasNext方法开货值时候还有更多的元素可以返回。
+
+遍历迭代器的所有元素最直接的方法是通过循环：
+
+```scala
+while(it.next())
+  println(it.next())
+```
+
+Scala的迭代器还提供了Traversable、Iterable和Seq特质中的大部分方法，比如，提供了foreach，上述过程可以简写为：
+
+```scala
+it foreach println
+```
+
+还可以使用for表达式：
+
+```scala
+for (elem <- it) println(elem)
+```
+
+迭代器的foreach和可遍历集合(Traverable)的同名方法有一个重要的区别是：`对迭代器调用foreach，它执行完后会将迭代器留在末端`。因此对相同的迭代器再次调用next会抛NoSuchElementException。而`对集合调用foreach，它会保持集合中的元素数量不变`（除非传入的函数会添加或移除元素，不过并不鼓励这样做，因为可能会带来令人意外的结果）。
+
+```scala
+scala> val it = Iterator("This", "is", "a", "Scala", "script")
+it: Iterator[String] = <iterator>
+
+scala> it.map(_.length)
+res0: Iterator[Int] = <iterator>
+
+scala> res0 foreach println
+4
+2
+1
+5
+6
+
+scala> it.next //调用完上一步后，已经指向it的尾部
+java.util.NoSuchElementException: next on empty iterator
+  at scala.collection.Iterator$$anon$2.next(Iterator.scala:41)
+  at scala.collection.Iterator$$anon$2.next(Iterator.scala:39)
+  at scala.collection.IndexedSeqLike$Elements.next(IndexedSeqLike.scala:63)
+  ... 28 elided
+
+scala> it.hasNext
+res3: Boolean = false
+```
+
+另一个例子是dropWhile方法，可以用来找到迭代器中首个满足某种条件的`首个元素`：
+
+```scala
+scala> val it = Iterator("a", "number", "of", "words")
+it: Iterator[String] = <iterator>
+
+scala> it dropWhile (_.length < 2)
+res17: Iterator[String] = <iterator>
+
+scala> res17.next() //如果执行的是it.next()，就会返回a，it并没在第二步被修改
+res18: String = number
+
+//与上述代码分开，单独执行
+scala> val it = Iterator("a", "number", "of", "words")
+it: Iterator[String] = <iterator>
+
+scala> it dropWhile (_.length < 2)
+res19: Iterator[String] = <iterator>
+
+scala> it.next()
+res20: String = a
+```
+
+只有一个标准操作duplicate允许重用同一个迭代器：
+
+```scala
+scala> val it = Iterator("a", "number", "of", "words")
+it: Iterator[String] = <iterator>
+
+scala> val (it1, it2) = it.duplicate
+it1: Iterator[String] = <iterator>
+it2: Iterator[String] = <iterator>
+```
+
+it1和it2相互独立，且都和it拥有相同的元素，it并没有被修改掉，还是原始的it:
+
+```scala
+scala> it.next()
+res21: String = a
+
+scala> it.next()
+res22: String = number
+```
+
+但是it的next操作会影响it1和it2：
+
+```scala
+scala> val it = Iterator("a", "number", "of", "words")
+it: Iterator[String] = <iterator>
+
+scala> val (it1, it2) = it.duplicate
+it1: Iterator[String] = <iterator>
+it2: Iterator[String] = <iterator>
+
+scala> it.next()
+res23: String = a
+
+scala> it.next()
+res24: String = number
+
+scala> it1.next()
+res25: String = of
+
+scala> it2.next()
+res26: String = of
+
+scala> it.next()
+res27: String = words
+
+scala> it1.next()
+java.util.NoSuchElementException: next on empty iterator
+  at scala.collection.Iterator$$anon$2.next(Iterator.scala:41)
+  at scala.collection.Iterator$$anon$2.next(Iterator.scala:39)
+  at scala.collection.IndexedSeqLike$Elements.next(IndexedSeqLike.scala:63)
+  at scala.collection.Iterator$Partner$1.next(Iterator.scala:1308)
+  ... 28 elided
+```
+
+总的来说，迭代器的行为跟集合很像，如果你在调用了迭代器的方法后就不再访问它。Scala几个类库将这个性质显式地表示为一个名为TraversableOnce的抽象，这是Traversable和Iterator的公共超特质。正如其名称所示，TraversableOnce对象可以用foreach来遍历，不过在遍历后该对象的状态并没有规定。如果是一个Iterator，遍历后将位于它的末端，而如果是Traversable，遍历过后保持原样。`TraversableOnce的一个常见用例是作为即可以接收迭代器也可以接收可遍历集合的方法的入参类型声明`。比如，Traversable特质的++方法，它接收一个TraversableOnce参数，因此可以追加来自迭代器或者可遍历集合的元素。
+
+#### 24.15.1 带缓冲的迭代器
+
+有时需要一个可以“向前看”的迭代器，这样就可以检查下一个要返回的元素但并不往前推进，例如，需要从一个返回字符串序列的迭代器中跳过前面的空字符串，尝试这样实现：
+
+```scala
+def skipEmptyWordsNOT(it: Iterator[String]) = {
+  while (it.next().isEmpty){it.next()}
+}
+```
+
+这样的实现有一个明显的问题是，会跳过第一个非空的字符串！这个问题的解决方案是使用待缓冲的迭代器，即BufferedIterator特质的实例。BufferedIterator是Iterator的子特质，提供了一个额外的方法：`head`，调用它会返回迭代器的第一个元素，不过并不会将迭代器推进到下一步。用待缓冲的迭代器跳过空字符可以这样写：
+
+```scala
+def skipEmptyWords(it: BufferedIterator[String]) = {
+  while (it.next().isEmpty){it.next()}
+}
+```
+
+每个迭代器都可以转换为待缓冲的迭代器，方法是调用其buffered方法：
+
+```scala
+scala> val it = Iterator(1, 2, 3, 4)
+it: Iterator[Int] = <iterator>
+
+scala> val bit = it.buffered
+bit: scala.collection.BufferedIterator[Int] = <iterator>
+
+scala> bit.head //调用head并不会推进迭代器到下一步
+res38: Int = 1
+
+scala> bit.next() //与head返回的元素一致
+res39: Int = 1
+
+scala> bit.next()
+res40: Int = 2
+```
 
 ### 24.16 从头创建集合
 
+Scala集合的一个通行功能，可以挑选任何一个集合名，然后用圆括号给出元素的列表来创建一个新的集合：
+
+```scala
+Traversable()           // 一个空的可遍历的对象
+List()                  // 空列表
+List(1.0, 2.0)          // 有两个元素的列表
+Vector(1.0, 2.0)        // 有两个元素的向量
+Iterator(1, 2, 3)       // 三个元素的迭代器
+Set(dog, cat, bird)     // 动物的集合
+HashSet(dog, cat, bird) // 同样动物组成的哈希集
+Map('a' -> 7, 'b' -> 0) // 从字符到整数的映射
+```
+
+这样实现的背后，都是调用了某个对象的apply方法，第三行代码展开后就是：
+
+```scala
+List.apply(1.0, 2.0)
+```
+
+因此这是一个对List类的伴生对象的apply方法的调用。Scala类库中每个集合类都有一个带有这样的apply方法的伴生对象。无论具体的集合类，调用apply将会产出该特质的某种默认实现：
+
+```scala
+scala> List(1, 2, 3)
+res41: List[Int] = List(1, 2, 3)
+
+scala> Traversable(1, 2, 3)
+res42: Traversable[Int] = List(1, 2, 3)
+
+scala> scala.collection.mutable.Traversable(1, 2, 3)
+res43: scala.collection.mutable.Traversable[Int] = ArrayBuffer(1, 2, 3)
+```
+
+另外，Scala中Seq特质的后代还通过伴生对象提供了其他工厂��作：
+
+|操作|操作含义|
+|--|--|
+|S.empty|空序列|
+|S(x, y, z)|由x, y, z组成的序列|
+|S.concat(xs, ys, zs)|连接操作|
+|S.fill(n)(e)|长度为n的序列，其中每个元素由表达式e计算|
+|S.fill(m, n)(e)|大小为m×n的序列，其中每个元素由表达式e计算|
+|S.tabulate(n)(f)|长度为n的序列，其中对下标i对应的元素有f(i)计算得出|
+|S.tabulate(m, n)(f)|长度为m×n的序列，其中对下标i对应的元素有f(i)计算得出|
+|S.range(start, end)|整数序列，从start到end，默认步长为1|
+|S.range(start, end, step)|整数序列，从start到end，步长为step|
+|S.iterate(x, n)(f)|长度为n的序列，元素值为x, f(x), f(f(x)), ...|
+
 ### 24.17 Java和Scala集合互转
+
+跟Scala，Java也有很多类库，它们之间有很多相似之处，两个集合类库都有迭代器、集、映射和序列等等。当Scala更加强调了不可变集合，并提供了更多将集合变换为新集合的操作。
+
+有时候可能需要从一个集合框架转换到另一个集合框架。例如，可能想要访问某个已有的Java集合，把它当做是Scala集合，又或者想要将某个Scala集合传递给某个预期Java集合的方法。这些都很容易做到，因为Scala在JavaConversions对象中提供了所有主要集合类型之间的隐式转化，具体来说能找到下列类型之间的双向转换：
+
+```scala
+Iterator       ⇔ java.util.Iterator
+Iterator       ⇔ java.util.Enumeration
+Iterable       ⇔ java.lang.Iterable
+Iterable       ⇔ java.util.Collection
+mutable.Buffer ⇔ java.util.List
+mutable.Set    ⇔ java.util.Set
+mutable.Map    ⇔ java.util.Map
+```
+
+要允许这些转换，只需要像这样做一次引入：
+
+```scala
+import scala.collection.JavaConversions._
+```
+
+现在就有了在Scala集合和对应的Java集合之间的相互转换能力：
+
+```scala
+scala> import collection.mutable._
+import collection.mutable._
+
+scala> val ju1: java.util.List[Int] = ArrayBuffer(1, 2, 3)
+
+ju1: java.util.List[Int] = [1, 2, 3]
+
+scala> val buf: Seq[Int] = ju1
+
+buf: scala.collection.mutable.Seq[Int] = ArrayBuffer(1, 2, 3)
+
+scala> val m: java.util.Map[String, Int] = HashMap("abc" -> 1, "hello" -> 2)
+
+m: java.util.Map[String,Int] = {abc=1, hello=2}
+```
+
+在内部，这个转换是通过设置一个“包装”对象并将所有操作转发到底层集合对象来实现的。因此集合在Java和Scala席间转换时，并不会做拷贝。一个有趣的性质是，如果你完成一次往返的转换，比如将Java类型转换成对应的Scala的类型，并再转换回Java的类型，你得到的还是最开始的那个集合对象。
+
+还有以下其他常用的Scala集合可以被转换为Java类型，不过并没有另一个方向的转化与之对应：
+
+```scala
+Seq         ⇒ java.util.List
+mutable.Seq ⇒ java.util.List
+Set         ⇒ java.util.Set
+Map         ⇒ java.util.Map
+```
+
+由于Java并不在类型上区分可变集合和不可变集合。从collection.immutable.List转成java.util.List后，如果尝试对它进行变更操作，将会抛出UnsupportedOperationException：
+
+```scala
+scala> val ju1: java.util.List[Int] = List(1, 2, 3)
+ju1: java.util.List[Int] = [1, 2, 3]
+
+scala> ju1.add(4)
+java.lang.UnsupportedOperationException
+  at java.util.AbstractList.add(AbstractList.java:148)
+  at java.util.AbstractList.add(AbstractList.java:108)
+  ... 28 elided
+```
