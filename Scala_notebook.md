@@ -10484,7 +10484,7 @@ scala> val bldr = buf mapResult (_.toArray)
 bldr: scala.collection.mutable.Builder[Int,Array[Int]] = ArrayBuffer()
 ```
 
-### 25.2 分解出通用的操作
+### 25.2 抽取公共操作
 
 ### 25.3 集成新的集合
 
@@ -10492,8 +10492,8 @@ bldr: scala.collection.mutable.Builder[Int,Array[Int]] = ArrayBuffer()
 
 #### 25.3.2 适应RNA方法的结果类型
 
-#### 25.3.3 处理映射
+#### 25.3.3 处理map等方法
 
-#### 25.3.4 集成新的集合和映射
+#### 25.3.4 集成新的集和映射
 
 #### 25.3.5 总结
