@@ -1970,7 +1970,7 @@ two
 three
 ```
 
-在函数内部，重复参数的的类型为参数声���类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
+在函数内部，重复参数的的类型为参数声����类型的一个数组`Array[String]`。如果你有一个某种类型的数组，你试图把它作为一个重复参数传递，编译器会抛出一个错误。
 
 ```scala
 scala> val arr = Array("One", "Two", "Three")
@@ -7328,7 +7328,7 @@ abstract class Dollar extends AbstractCurrency{
 }
 ```
 
-这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实现������个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
+这样的设计可用，但是并不完善，因为缺少了+和*的具体定义。那么如何在类中实���������个方法呢？可能会使用`this.amount + that.amount`来实现+方法，但是怎么将不同币种的数据转化成同一币种，然后相加呢？可能会这么实现：
 
 ```scala
 def +(that: Currency): Currency = new Currency{
@@ -10364,7 +10364,7 @@ scala> scala.collection.mutable.Traversable(1, 2, 3)
 res43: scala.collection.mutable.Traversable[Int] = ArrayBuffer(1, 2, 3)
 ```
 
-另外，Scala中Seq特质的后代还通过伴生对象提供了其他工厂��作：
+另外，Scala中Seq特质的后代还通过伴生对象提供了��他工厂方法操作：
 
 |操作|操作含义|
 |--|--|
@@ -10443,3 +10443,57 @@ java.lang.UnsupportedOperationException
   at java.util.AbstractList.add(AbstractList.java:108)
   ... 28 elided
 ```
+
+## 25 Scala集合架构
+
+本章详细描述了Scala集合框架的架构。继续第24章的主题，你会发现更多关于框架内部工作的信息。您还将了解此体系结构如何帮助您在重用框架中集合功能的绝大部分的同时，用几行代码定义自己的集合。
+
+第24章列举了大量的集合操作，这些操作一致地存在于许多不同的集合实现中。为每种集合类型重新实现每种集合操作将导致大量重复代码，其中大部分代码将从其他地方复制。随着时间的推移，当操作在集合库的一部分中添加或修改而不在其他部分中添加或修改时，这种代码重复可能会导致不一致。新的集合框架的主要设计目标是避免任何重复，在尽可能少的地方定义每个操作。
+
+设计方法是在集合中实现大多数操作可以灵活地从单个基类和实现继承的“模板”。在本章中，将研究这些模板，以及构成框架“构建块”的其他类和特征，以及它们所支持的构造原则。
+
+### 25.1 构建器
+
+几乎所有的集合操作都是通过遍历和构建器实现的。遍历可以由Traverable的foreach方法实现，构造一个新集合使用Builder类的实例。下面给出Builder的简要定义：
+
+```scala
+package scala.collection.generic
+
+class Builder[-Elem, +To]{
+  def +=(elem: Elem): this.type
+  def result(): To
+  def clear()
+  def mapResult[NewTo](f: To => NewTo): Builder[Elem, NewTo] = {
+    ......
+  }
+}
+```
+
+您可以使用`b += x`将元素x添加到构建器b中。还有一种语法可以一次性添加多个元素:例如，`b += (x, y)`和`b ++= xs`作为缓冲。(实际上，缓冲区是构建器的一个富包装版本)，result()方法从构建器返回一个集合。result()方法从构建器中返回一个集合，但可以使用clear()将其重置为新的空状态。构建器在元素类型Elem和它们返回的集合的To类型方面都是通用的。
+
+通常，构建器可以引用其他构建器来组装集合的元素，但随后又希望转换其他构建器的结果。例如，为其提供一个不同的类型。这个任务通过类Builder中的mapResult方法得到简化。假设你有一个数组缓冲buf。数组缓冲本身就是构建器，因此获取数组缓冲的result()将返回它自己。如果你想使用这个缓冲产生一个生成器，构建数组，你可以使用mapResult:
+
+```scala
+scala> import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ArrayBuffer
+
+scala> val buf = new ArrayBuffer[Int]
+buf: scala.collection.mutable.ArrayBuffer[Int] = ArrayBuffer()
+
+scala> val bldr = buf mapResult (_.toArray)
+bldr: scala.collection.mutable.Builder[Int,Array[Int]] = ArrayBuffer()
+```
+
+### 25.2 分解出通用的操作
+
+### 25.3 集成新的集合
+
+#### 25.3.1 集成序列
+
+#### 25.3.2 适应RNA方法的结果类型
+
+#### 25.3.3 处理映射
+
+#### 25.3.4 集成新的集合和映射
+
+#### 25.3.5 总结
