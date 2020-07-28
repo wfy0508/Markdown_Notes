@@ -10484,16 +10484,412 @@ scala> val bldr = buf mapResult (_.toArray)
 bldr: scala.collection.mutable.Builder[Int,Array[Int]] = ArrayBuffer()
 ```
 
-### 25.2 抽取公共操作
+### 25.2 抽取公共操作☆
+
+重新定义集合类型的主要设计目标是同时拥有自然的类型，以及在最大程度上共享实现代码。需要特别指出的是Scala集合遵循“相同结果类型”的原则：`之哟啊可能，对集合的变换操作将交出相同类型的集合`。举例来说，filter操作应该对所有集合类型交出相同集合类型的实例。对List应用filter应该得到List，对Map应用filter应该得到Map，以此类推。
+
+Scala集合类库是通过使用所谓的`实现特质`中的`泛型的构建器`和`遍历`来避免代码重复达成“相同结果类型”原则的。这些特质的命名中都带有Like后缀：例如IndexedSeqLike是IndexSeq的实现特质，TraversableLike是Traversable的实现特质。像Traversable或IndexSeq这样的集合具体方法的实现都是从这些特质继承下来的。实现特质不同于一般的集合，它们有两个参数类型，不仅在`集合元素的类型`上是参数化的，在集合的`表现类型（representation type, 也就是底层的集合）`上也是参数化的，比如Seq[T]或List[T]。
+
+举例来说，一下是TraversableLike特质的头部：
+
+```scala
+trait TraversableLike[+Elem, +Repr]{...}
+```
+
+类型参数Elem表示可遍历集合的元素类型，而类型参数Repr表示它的表现类型。对于Repr是什么并没有限制，Repr可以被实例化成不是Traversable的子类型。这样一来，位于集合继承关系之外的类，比如String和Array，也可以利用集合实现特质中定义的所有操作。
+
+```scala
+package scala.collection
+
+trait TraversableLike[+Elem, +Repr]{
+  def newBuilder: Builder[Elem, Repr]
+  def foreach[U](f: Elem => U)
+  ...
+  def filter(p: Elem => Boolean): Repr = {
+    val b = newBuilder
+    foreach {elem => if(p(elem)) b += elem}
+    b.result
+  }
+}
+```
+
+在特质Traversable中，filter只定义一次，但对所有的集合类都可用，对所有使用这些方法的集合的实现方式是一致的。首先newBuilder构造出一个新的元素表现类型为Repr的构建器，然后用foreach遍历当前集合的所有元素。
+
+集合的map操作要更复杂一些，如果f是一个从String到Int的函数，而xs是一个List[String]，那么xs map f就应该得到List[Int]，反之亦然。不过如何在不重复定义列表和数组的map方法前提下做到这一点呢？
+
+上例代码中的newBuilder和foreach不足以完成这个操作，因为它只允许创建相同集合类型的实例，但map需要一个相同的集合类型的构建器的实例，氮元素的类型可能不同，不仅如此，像map这样的函数的类型构造器可能还在很大程度上取决于其他入参类型，如下示例：
+
+```scala
+scala> import collection.immutable.BitSet
+import collection.immutable.BitSet
+
+scala> val bits = BitSet(1, 2, 3)
+bits: scala.collection.immutable.BitSet = BitSet(1, 2, 3)
+
+scala> bits map (_ * 2)
+res1: scala.collection.immutable.BitSet = BitSet(2, 4, 6)
+
+scala> bits map (_.toFloat)
+res3: scala.collection.immutable.SortedSet[Float] = TreeSet(1.0, 2.0, 3.0)
+```
+
+如果将乘以2的函数应用到位组，将返回一个位组，但是如果将toFloat应用到位组，返回的确实一个通用的TreeSet[Float]，这样的结果当然不可能是位组，因为位组包含的是Int而不是Float。
+
+注意，`map的结果了类型取决于传入函数的类型`。如果对于位组传入的是Int，那么map的结果就是BiSet，如果传入的是其他类型，那么map的结果就只是个Set。
+
+BitSet的这个问题并非个案。再看下面一个例子：
+
+```scala
+scala> Map("a" -> 1, "b" -> 2) map {case (x, y) => (y, x)}
+res4: scala.collection.immutable.Map[Int,String] = Map(1 -> a, 2 -> b)
+
+scala> Map("a" -> 1, "b" -> 2) map {case (x, y) => y}
+res5: scala.collection.immutable.Iterable[Int] = List(1, 2)
+```
+
+第一个例子将键值对的映射方向反转，事实上，第一个表达式交出的是原始映射的反转，前提是它是可以反转的。不过第二个将键值对映射成整数，也就是键值对中值的部分。这里并不能从它的结果做出一个Map，不过仍然可以做出一个Iterable，这个Map的超特质。
+
+为什么不限制map只能返回一种集合？对于位组，map只接收Int到Int的函数，对于映射只接收对偶到对偶的函数。这样的做法是违背里氏替换原则：`Map是Iterable。因此任何在Iterable上的合法操作，也必须在Map上合法。`
+
+Scala解决这个问题的方式是重载：不是Java采用的那种简单的重载，因为那样不够灵活，而是隐式参数提供的更系统化的重载。
+
+```scala
+def map[B, That](f: Elem => B)(implicit bf: CanBuildFrom[Repr, B, That]): That = {
+  val b = bf(this)
+  for (x <- this) b += f(x)
+  b.result
+}
+```
+
+这是TraversableLike的map实现，跟filter实现很像，主要区别在于filter用的是TraversableLike抽象方法newBuilder，而map用的是一个额外的隐式参数的形式传入的类型为CanBuildFrom的**构建器工厂(builder factory)**。
+
+```scala
+package scala.collection.generic
+
+trait CanBuildFrom[-From, -Elem, To]{
+  //创建新的构建器
+  def apply（from: From): Builder[Elem, To]
+}
+```
+
+该特质代表了构建器工厂，它有三个类型参数：`Elem`代表要构建的集合的元素类型，`To`表示要构建的集合的类型，而`From`表示要应用到该构建器工厂的类型。通过定义正确的构建器工厂的隐式定义，可以按需定制正确的类型行为。
+
+以BitSet为例，它的伴生对象可以包含一个类型为CanBuildFrom[BitSet, Int, BitSet]的构建器工厂。这意味着当操作一个BitSet时，可以构造出另一个BitSet，只要要构建的集合的元素类型为Int。如果不是这样，总是可以退而求其次，采用另一个隐式构建器工厂，一个在mutable。Set的伴生对象中实现的隐式构建器工厂。这个更通用的构建器工厂定义为（其中A为泛型的类型参数）：
+
+```scala
+CanBuildFrom[Set[_], A, Set[A]]
+```
+
+这意味着，当操作一个以Set[_]通配类型表示的任意类型的Set时，仍然可以构建出一个Set，而不论元素类型A是什么。有了这两个CanBuildFrom的隐式实例，就可以依赖Scala的隐式解析规则来选取合适的并且是最具体的那个构建器工厂了。
+
+隐式解析对那那些比较麻烦的操作，比如map，提供了正确的静态类型，不过，动态类型会怎么样？确切地说，如果你有一个列表的值，其静态类型为Iterable，然后你对这个值map了某个函数：
+
+```scala
+scala> val xs: Iterable[Int] = List(1, 2, 3)
+xs: Iterable[Int] = List(1, 2, 3)
+
+scala> val ys = xs map (x => x * x)
+ys: Iterable[Int] = List(1, 4, 9)
+```
+
+ys的静态类型为Iterable，不过它的动态类型为List！做到这一层，需要额外的处理机制。CanBuildFrom的apply方法接收原集合为入参传入。泛型可遍历集合的大多数构建器工厂将这个调用转发到集合的genericBuilder方法。这个genericBuilder方法进而调用属于该集合的构建器。也就是说，`Scala用静态的隐式解析规则来解决map类型约束，用虚拟分发来选择与这些约束相对应的最佳动态（运行时）类型`。
 
 ### 25.3 集成新的集合
 
+如果想集成一个新的集合类，让它能够以正确的类型利用所有预定义的操作，需要怎么做？
+
 #### 25.3.1 集成序列
+
+假设要创建一个新的序列类型来表示RNA链，一个由4中碱基组成的序列：A（腺嘌呤，adenine）、T（胸腺嘧啶，thymine)、G（鸟嘌呤，guanine）和U（尿嘧啶，uracil）。碱基的定义很容易：
+
+```scala
+abstract class Base
+case object A extends Base
+case object T extends Base
+case object G extends Base
+case object U extends Base
+
+object Base{
+  val fromInt: Int => Base = Array(A, T, G, U)
+  val toInt: Base => Int = Map(A -> 0, T -> 1, G -> 2, U -> 3)
+}
+```
+
+每个碱基都定义为一个继承自公共抽象类Base的样例对象。Base类有一个伴生对象，该伴生对象定义了两个函数。
+
+接下来定义RNA链，从概念上讲RNA链就是一个Seq[Base]。不过RNA链会很长，可以做出一个紧凑的表现形式。由于只有4中碱基，每个碱基可以用2个比特位来标识。下面是第一版实现：
+
+```scala
+import scala.collection.IndexedSeqLike
+import scala.collection.mutable.{Builder, ArrayBuffer}
+import scala.collection.generic.CanBuildFrom
+
+final class RNA1 private (val groups: Array[Int], val length: Int) extends IndexedSeq[Base]{
+  import RNA1._
+  def apply(idx: Int): Base = {
+    if (idx < 0 || length <= idx)
+      throw new IndexOutOfBoundsException
+    Base.fromInt(groups(idx / N) >> (idx % N * S) & M)
+  }
+}
+
+object RNA1{
+  private val S = 2
+  private val N = 32 / S
+  private val M = (1 << S) - 1
+  def fromSeq(buf: Seq[Base]): RNA1 = {
+    val groups = new Array[Int]((buf.length + N - 1) / N)
+    for (i <- 0 until buf.length)
+      groups(i / N) |= Base.toInt(buf(i)) << (i % N * S)
+    new RNA1(groups, buf.length)
+  }
+  def apply(bases: Base*) = fromSeq(bases)
+}
+```
+
+- 第一个入参接收Int数组为首个入参的构造方法，包含了紧凑格式的RNA数据，每个元素包含16个碱基，除了最后一个元素外，这个元素可能是部分填充的。
+- 第二个参数length表示数组中碱基的数量。
+- RNA1扩展自IndexedSeq[Base]，该特质定义了两个抽象方法：length和apply。
+- RNA1类通过定义同名的参数化字段自动实现了length。还用上例给出的代码实现了索引方法apply。本质上讲，apply首先从groups数组中提取出一个整数值，然后用位右移(>>)和位与(&)从这个整数值中提取出正确的两比特位表示的数。
+- 私有常量S、N和M来自RNA1的伴生对象。S为每个包的大小(2);N为每个整数代表的两比特的包的个数；M是从整数中分理出最低位的S包的掩码。
+
+RNA1的构造方法是私有的，这样的设计对RNA序列的接口和实现做了很好的解耦。这样没法用new构造RNA序列，但是可以使用RNA1伴生对象提供两种可选的创建RNA序列的方式。
+
+- 第一种是fromSeq方法，将给定的碱基的序列（即类型为Seq[Base]的值）转换为RNA1类的实例。fromSeq方法将入参序列包含的所有碱基打包成数组，然后用这个数组和原始序列的长度作为土蚕调用RNA1的私有构造方法。这个做法利用了类的构造方法对伴生对象可见这一事实。
+- 第二种是通过RNA1的apply方法。这个方法接收可变数量的Base入参，然后简单地将它们作为序列转发给fromSeq。
+
+这两种创建机制实际运行效果：
+
+```scala
+scala> val xs = List(A, G, T, A)
+xs: List[Product with Serializable with Base] = List(A, G, T, A)
+
+scala> RNA1.fromSeq(xs)
+res7: RNA1 = read.RNA1(A, G, T, A)
+
+scala> val rna1 = RNA1(A, U, G, G, T)
+rna1: RNA1 = read.RNA1(A, U, G, G, T)
+```
 
 #### 25.3.2 适应RNA方法的结果类型
 
+以下是更多基于RNA1的交互：
+
+```scala
+scala> rna1.length
+res8: Int = 5
+
+scala> rna1.last
+res10: Base = T
+
+scala> rna1.take(3)
+res11: IndexedSeq[Base] = Vector(A, U, G)
+```
+
+前两个结果是符合预期的，但是第三个就不一定了，看到的静态类型是IndexedSeq[Base]，而动态类型为`Vector的结果值`，你可能预期看到是`RNA1的值`。不过这是不可能的！因为定义RNA1时，是从IndexedSeq扩展。而IndexedSeq类是有一个返回IndexedSeq的take方法，而这个方法是基于IndexedSeq的默认实现，也就是Vector。
+
+要改变这个行为，就是重写take方法，像这样：
+
+```scala
+def take(count: Int): RNA1 = RNA1.fromSeq(super.take(count))
+```
+
+这样对于take操作是够了，但是对于drop、filter和init这样的方法，不可能每个都要重写。幸好有一种很简单的方式可以达到同样的效果，RNA不仅需要继承IndexedSeq，还需要继承它的实现特质IndexedSeqLike。
+
+```scala
+final class RNA2 private (
+  val groups: Array[Int],
+  val length: Int
+) extends IndexedSeq[Base] with IndexedSeqLike[Base,RNA2]{
+  import RNA2._
+  override def newBuilder: Builder[Base, RNA2] = {
+    new ArrayBuffer[Base] mapResult fromSeq
+  }
+  def apply(idx: Int): Base = {
+    if (idx < 0 || length <= idx)
+      throw new IndexOutOfBoundsException
+    Base.fromInt(groups(idx / N) >> (idx % N * S) & M)
+  }
+}
+
+object RNA2{
+  private val S = 2
+  private val N = 32 / S
+  private val M = (1 << S) - 1
+  def fromSeq(buf: Seq[Base]): RNA2 = {
+    val groups = new Array[Int]((buf.length + N - 1) / N)
+    for (i <- 0 until buf.length)
+      groups(i / N) |= Base.toInt(buf(i)) << (i % N * S)
+    new RNA2(groups, buf.length)
+  }
+  def apply(bases: Base*) = fromSeq(bases)
+}
+```
+
+如果漏掉newBuilder的定义，可能会得到如下这样的错误：
+
+```scala
+error: overriding method newBuilder in trait TraversableLike of type => scala.collection.mutable.Builder[Base,RNA2];
+ method newBuilder in trait GenericTraversableTemplate of type => scala.collection.mutable.Builder[Base,IndexedSeq[Base]] has incompatible type
+final class RNA2 private (
+            ^
+```
+
+提示这里需要的是一个结果类型为Builder[Base, RNA2]的newBuilder方法，但编译器找到是一个结果类型为Builder[Base, IndexedSeq[Base]]的方法。后者并不会重写前者。
+
+第一个方法，也就是结果类型为Builder[Base, RNA2]的，是RNA2定义中，通过RNA2这个类型参数传给IndexedSeqLike后得到以实例化的抽象方法。第二个方法，也就是结果类型为Builder[Base, IndexedSeq[Base]]的，是被继承的IndexedSeq类提供的。换句话说，RNA2类如果没有钱一个结果类型的newBuilder定义，它就是非法的。
+
+改良后的RNA2看起来就符合预期了：
+
+```scala
+scala> val rna2 = RNA2(A, U, G, G, T)
+rna2: RNA2 = read.RNA2(A, U, G, G, T)
+
+scala> rna2 take 3
+res13: RNA2 = read.RNA2(A, U, G)
+
+scala> rna2 filter (_ != U)
+res14: RNA2 = read.RNA2(A, G, G, T)
+```
+
 #### 25.3.3 处理map等方法
 
-#### 25.3.4 集成新的集和映射
+集合中还有一类方法没有处理，这些方法并不总是返回确定的集合类型，他们可能返回同一个集合，但是是不同的元素类型。经典的就是map方法。如果s是一个Seq[Int]，而f是一个从Int到String的函数，那么s.map(f)将返回Seq[String]。这样一来，在调用方接受的结果之间，元素的类型变了，但集合的种类保持不变。
 
-#### 25.3.5 总结
+还有一些比如追加方法++，向Int列表中追加String列表的结果是一个Any列表。那么针对RNA链，希望对RNA链执行碱基到碱基的映射应该仍然交出RNA链：
+
+```scala
+scala> val rna = RNA(A, U, G, G, T)
+rna: RNA = RNA(A, U, G, G, T)
+
+scala> rna map{case A => T case b =>b}
+res16: RNA = RNA(A, U, G, G, T)
+
+scala> rna ++ rna
+res17: RNA = RNA(A, U, G, G, T)(A, U, G, G, T, A, U, G, G, T)
+```
+
+另一方面，对RNA链执行碱基到其他类型的映射没法交出另一个RNA链，因为新元素的类型不对，只能交出一个序列。同理，将类型不是Base的元素追加到RNA链可以交出一个通用的序列，但是一定不是RNA链。
+
+```scala
+scala> rna map Base.toInt
+res20: IndexedSeq[Int] = Vector(0, 3, 2, 2, 1)
+
+scala> rna ++ List("missing", "data")
+res21: IndexedSeq[Object] = Vector(A, U, G, G, T, missing, data)
+```
+
+但是，针对目前RNA的定义是得不到期望的结果：
+
+```scala
+scala> rna map{case A => T case b =>b}
+res16: IndexedSeq[Base] = Vector(T, U, G, G, T)
+
+scala> rna ++ rna
+res17: IndexedSeq[Base] = Vector(A, U, G, G, T, A, U, G, G, T)
+```
+
+所以map和++的记过无论如何都不会是RNA链，哪怕生成的集合元素类型都是Base。为了做的很好，可以仔细看下一些map方法的签名（++也有类似的签名）。map方法最开始是在scala.collection.TraversableLike类中定义的，签名如下：
+
+```scala
+def map[B, That](f: Elem => B)(implicit cbf: CanBuildFrom[Repr, B, That]): That
+```
+
+Elem是集合的元素类型，Repr是集合本身的类型，也就是传入TraversableLike和IndexedSeqLike这些实现类的第二个类型参数。map方法额外接收两个类型的参数，B和That。参数B表示映射函数的结果类型，这也是新集合元素的类型，参数That出现在map的结果类型上，因此它代表了新创建的集合的类型。
+
+That类型如何确定？它通过类型为CanBuildFrom[Repr, B, That]的隐式参数cbf跟其他类型链接起来。这些CanBuildFrom的隐式值由集合类个自定义。从本质上讲，类型为`CanBuildFrom[From, Elem, To]`的隐式值表达的意思是：`有一种方式，将给定一个类型为From的集合，可以用类型为Elem的元素构建出一个类型为To的集合`。
+
+前面的代码没有得到期望的结果，是因为没有创建RNA2序列的CanBuildFrom实例，因此编译器能找到的次佳选择就是RNA2继承的IndexedSeq的伴生对象中的CanBuildFrom了。那个CanBuildFrom隐式值创建的是IndexedSeq，这也是对rna2应用map时看到的结果类型。
+
+要实现期望的返回结果，需要在RNA类的伴生对象中定义一个CanBuildFrom的隐式实例，这个实例的类应该是`CanBuildFrom[RNA, Base, RNA]`。这个实例就是要`从给定的RNA链和一个新元素类型Base构建出另一个RNA链`。
+
+跟RNA2的实现有两点不同。
+
+- 首先，NewBuilder的实现从RNA类移到了伴生对象中。RNA类中的newBuilder方法只是简单地将调用转发过去。
+- 其次，RNA对象中现在有一个CanBuildFrom的隐式值，要创建这样一个对象，需要定义CanBuildFrom的两个apply方法。
+
+这两个方法都会创造RNA集合的构建器，不过参数列表不同。
+
+- `apply()`只是简单地创建出正确类型的构建器。
+- `apply(from)`方法将原始的集合作为入参。这样做有助于将构建器的返回类型的动态（运行时）类型适配成接收方（被调用方）的动态（运行时）类型。
+
+对RNA而言，这种静态类型和动态类型不一致的情况并不会发生，因为RNA类时final的，因此任何静态类型为RNA的接收方，其动态类型也一定是RNA。这就是为什么apply(from)也是简单地调用newBuilder，直接忽略掉入参。
+
+```scala
+final class RNA private (
+  val groups: Array[Int],
+  val length: Int
+) extends IndexedSeq[Base] with IndexedSeqLike[Base,RNA]{
+  import RNA._
+
+  override protected[this] def newBuilder: Builder[Base, RNA] = {
+    RNA.newBuilder
+  }
+
+  def apply(idx: Int): Base = {
+    if (idx < 0 || length <= idx)
+      throw new IndexOutOfBoundsException
+    Base.fromInt(groups(idx / N) >> (idx % N * S) & M)
+  }
+
+  override def foreach[U](f: Base => U): Unit = {
+    var i = 0
+    var b = 0
+    while (i < length){
+      b = if(i % N == 0) groups(i / N) else b >>> S
+      f(Base.fromInt(b & M))
+      i += 1
+    }
+  }
+}
+
+object RNA{
+  private val S = 2 //单组的比特数
+  private val N = 32 / S //用于分离出单个组的掩码
+  private val M = (1 << S) - 1 //一个Int可以容纳的组的个数
+  
+  def fromSeq(buf: Seq[Base]): RNA = {
+    val groups = new Array[Int]((buf.length + N - 1) / N)
+    for (i <- 0 until buf.length)
+      groups(i / N) |= Base.toInt(buf(i)) << (i % N * S)
+    new RNA(groups, buf.length)
+  }
+  
+  def apply(bases: Base*) = fromSeq(bases)
+
+  def newBuilder: Builder[Base, RNA] = {
+    new ArrayBuffer mapResult fromSeq
+  }
+
+  implicit def canBuildFrom: CanBuildFrom[RNA, Base, RNA] = {
+    new CanBuildFrom[RNA, Base, RNA]{
+      def apply(): Builder[Base, RNA] = newBuilder
+      def apply(from: RNA): Builder[Base, RNA] = newBuilder
+    }
+  }
+}
+```
+
+这样完善定义之后，返回的结果就是我们期望的类型：
+
+```scala
+scala> val rna = RNA(A, U, G, G, T)
+rna: RNA = read.RNA(A, U, G, G, T)
+
+scala> rna map {case A => T case b => b}
+res29: RNA = read.RNA(T, U, G, G, T)
+
+scala> rna ++ rna
+res30: RNA = read.RNA(A, U, G, G, T, A, U, G, G, T)
+```
+
+在上述优化定义时，重写了foreach方法。IndexedSeq中foreach的标准实现只是简单地用apply选择集合中的第i个元素，其中i的取值范围是0到集合的长度减1。因此这个标准实现在选择RNA链中每个元素是都会从数组选择一个元素并从中解包出一个碱基。RNA类重写的foreach更加聪明，每当它选中数组中的一个元素，都会立即对钙元素包含的所有碱基应用给定的函数。这样就大大减轻了从数组选择和按位解包的负担。
+
+#### 25.3.4 总结
+
+如果想要完整地将一个新的集合集成到框架中，需要注意如下几点：
+
+1. 决定该集合是可变的还是不变的。
+2. 选择合适的特质作为集合的基础。
+3. 从合适的实现特质继承来实现大多数集合操作。
+4. 如果你要想map和类似操作返回你的集合类型，在你的伴生对象中提供一个隐式的CanBuildFrom。
