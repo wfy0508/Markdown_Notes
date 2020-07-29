@@ -10893,3 +10893,401 @@ res30: RNA = read.RNA(A, U, G, G, T, A, U, G, G, T)
 2. 选择合适的特质作为集合的基础。
 3. 从合适的实现特质继承来实现大多数集合操作。
 4. 如果你要想map和类似操作返回你的集合类型，在你的伴生对象中提供一个隐式的CanBuildFrom。
+
+## 26 提取器
+
+Scala中，习惯使用模式匹配精确地拆解和分析数据的方式，本章将这个概念进一步泛化。到目前为止，构造方法模式都跟样例类有关。例如，Some(x)是一个合法的模式，因为Some是一个样例类。有时候想写这样的模式，但并不需要创建关联的样例类。这样的模式，提取器是一种实现手段。
+
+### 26.1 提取电子邮件地址
+
+对于给定的字符串，要判断它是不是电子邮件，如果是提取用户部分和域名部分。传统方式是用三个助手函数：
+
+```scala
+def isEMail(s: String): Boolean
+def domain(s: String): String
+def user(s: String): String
+```
+
+这样就可以解析给定的字符串：
+
+```scala
+if (isEMail) println(user(s) + " AT " + domain(s))
+else println("not an email address")
+```
+
+但是这样做不够灵活，如果想要找到列表中连续两个字符都是同一个用户的邮件地址，可以用前面定义的访问函数来看看到底有多麻烦。
+
+假定可以使用模式匹配字符串：
+
+```scala
+EMail(user, domain)
+```
+
+然后通过内嵌的“@”符号，来匹配用户和域名：
+
+```scala
+s match{
+  case EMail(user, domain) => println(user + " AT " + domain)
+  case _ => println("not an email address")
+}
+```
+
+更复杂的连续出现的同一个用户的两个电子邮件地址的问题，可以翻译如下：
+
+```scala
+ss match{
+  case EMail(u1, d1) :: EMail(u2, d2) :: _ if (u1 == u2) => ...
+}
+```
+
+不过这里有个问题，就是字符串并不是样例类，它们没有符合Email(user, domain)的表现形式。这就需要提取器来实现，`有了提取器，模式并不需要遵循从类型的内部表现形式`。
+
+### 26.2 提取器
+
+提取器拥有名为unapply的成员方法的对象，对某个值做匹配并将它拆开；apply是构建器（可选的），是unapply反方向操作。
+
+```scala
+object EMail{
+  def apply(user: String, domain: String) = user + "@" + domain
+  def unapply(str: String): Option[(String, String)] = {
+    val parts = str split "@"
+    if (parts.length == 2) Some(parts(0), parts(1)) else None
+  }
+}
+```
+
+如果想更明显地表明意图，还可以让EMail继承Scala的函数类型：
+
+```scala
+object EMail extends ((String, String) => String){...}
+```
+
+如果str不是电子邮件，就会返回None。
+
+```scala
+unapply("John@example.com") equals Some("John", "example.com")
+unapply("John Doe") equals None
+```
+
+每当模式匹配遇到引用提取器对象的模式时，会调用提取器的unapply方法：
+
+```scala
+selectorString match{case EMail(user, domain) => ...}
+```
+
+会引发如下调用：
+
+```scala
+EMail.unapply(selectorString)
+```
+
+selectorString的类型String满足unapply的参数类型，但是这并不是必须的，可以在匹配之前进行检查：
+
+```scala
+val x: Any = ...
+x match {case EMail(user, domain) => ...}
+```
+
+如果x不满足，立即失败，如果满足，继续进行匹配。
+
+在对象Email中，apply方法被称为`注入`，unapply被称为`提取`。如果在对象总只定义了提取逻辑，则这个对象被称为`提取器`。
+
+如果包含了“注入”方法，那么应该是”提取“方法的对偶(dual)。举例来说：
+
+```scala
+EMail.unapply(Email.apply(user, domain))
+```
+
+应该返回：
+
+```scala
+Some(user, domain)
+```
+
+也就是Some包起来的同一个入参序列，反方向意味着首先执行unapply再执行apply：
+
+```scala
+EMail.unapply(obj) match{
+  case Some(u, d) => Email.apply(u, d)
+}
+```
+
+这段代码中，如果obj的匹配成功了，应该用apply取回的是同一个对象。这就是apply和unapply的对偶性设计。
+
+### 26.3 提取0个或1个变量的模式
+
+前面的unapply方法如果匹配成功，返回的是一对元素值。这很容易泛化成多个变量的模式。如果要绑定N个变量，unapply可以返回一个以Some包起来的N个元素的元组。
+
+不过当模式只绑定一个变量时，处理逻辑是不同的，Scala并没有单个元素的元组。为了只返回单个模式元素，unapply方法只是简单地将元素本身放在Some里，下面给出的提取器对象顶一个针对那些由连续两个出现的相同字符串组成的字符串的apply和unapply方法：
+
+```scala
+object Twice{
+  def apply(s: String): String = s + s
+  def unapply(s: String): Option[String] = {
+    val length = s.length / 2
+    val half = s.substring(0, length)
+    if (half == s.substring(length)) Some(half) else None
+  }
+}
+```
+
+也有可能某个提取其模式并不绑定任何变量，这是unapply就会返回布尔值，如只返回全部为大写字母的s：
+
+```scala
+object UpperCase {
+  def unapply(s: String): Boolean = s.toUpperCase == s
+}
+```
+
+下面的useTwiceUpper函数在它的欧式匹配代码中同时应用了前面定义的所有提取器：
+
+```scala
+def useTwiceUpper(s: String) = s match {
+  case EMail(Twice(x @ UpperCase()), domain) =>
+    "match: " + x + " in domain " + domain
+  case _ => "no match"
+}
+```
+
+该函数的第一个模式匹配的是所有连续两个大写用户名的同一个字符串的电子邮件地址的字符串(x @ UpperCase是将x和UpperCase匹配的模式关联起来，详见15.2章节)：
+
+```scala
+scala> useTwiceUpper("DIDI@hotmail.com")
+res0: String = match: DI in domain hotmail.com
+
+scala> useTwiceUpper("DIDO@hotmail.com")
+res1: String = no match
+
+scala> useTwiceUpper("didi@hotmail.com")
+res2: String = no match
+```
+
+### 26.4 提取可变长参数的模式
+
+之前定义的unapply提取方法，返回的元素数量是固定的，有时候不够灵活，有时想返回域名中的每个部分，可以使用下面模式：
+
+```scala
+dom match{
+  case Domain("org", "acm") => println("acm.org")
+  case Domain("com", "sun", "java") => println("java.sun.com")
+  case Domain("net", _*) => println("a .net domain")
+}
+```
+
+参数列表的最后序列通配模式_*会匹配序列中任何剩余的元素。提取器支持前面例子中的**变长参数匹配**，unapply无法完成这个任务，但是有一个方法专门处理变长参数匹配：`unapplySeq`。
+
+```scala
+object Domain{
+  def apply(parts: String*): String = {
+    parts.reverse.mkString(".")
+  }
+
+  def unapplySeq(whole: String): Option[Seq[String]] = {
+    Some(whole.split("\\.").reverse)
+  }
+}
+```
+
+unapplySeq的结果类型必须符合Option[Set[T]]的要求，其中元素类型T可以是任意类型。
+
+可以用Domain提取器获取电子邮件地址字符串的更详细的信息。例如，要查找某个“.com”域名下的某个名为”tom“的电子邮件地址：
+
+```scala
+def isTomDotCom(s: String): Boolean = s match{
+  case EMail("tom", Domain("com", _*)) => true
+  case _ => false
+}
+```
+
+给出了似乎是预期的结果：
+
+```scala
+scala> isTomDotCom("tom@sun.com")
+res3: Boolean = true
+
+scala> isTomDotCom("peter@sum.com")
+res4: Boolean = false
+
+scala> isTomDotCom("tom@acm.org")
+res5: Boolean = false
+```
+
+从unapplySeq返回某些固定的元素再加上可变的部分也是可行的。这是通过将所有的元素放在元组里返回来实现的，其中可变部分出现在元素的最后一位，就像往常一样，将域名部分展开成序列：
+
+```scala
+object ExpandedEMail{
+  def unapplySeq(email: String): Option[(String, Seq[String])] = {
+    val parts = email split "@"
+    if (parts.length == 2)
+      Some(parts(0), parts(1).split("\\.").reverse)
+    else
+     None
+  }
+}
+```
+
+ExpandedEMail的unapplySeq方法返回一个类型为Tuple2的可选值。其中第一个元素为用户名部分，第二个元素表示域名的序列，可以向往常一样用它来做模式匹配：
+
+```scala
+scala> val s = "tom@support.com.cn"
+s: String = tom@support.com.cn
+
+scala> val ExpandedEMail(name, topdom, subdoms @ _*) = s
+name: String = tom
+topdom: String = cn
+subdoms: Seq[String] = WrappedArray(com, support)
+```
+
+### 26.5 提取器和序列模式
+
+在15.2章节，可以使用序列模式来访问列表或数组的元素：
+
+```scala
+List()
+List(x, y, _*)
+Array(x, 0, 0, _)
+```
+
+事实上，Scala标准库中额这些序列模式都是用提取器实现的。举例来说，形如List(...)这样的模式之所以可行，是因为scala.List的伴生对象是一个定义了unapplySeq方法的提取器，如下：
+
+```scala
+package scala
+object List{
+  def apply[T](elem: T*) = elems.toList
+  def unapplySeq[T](x: List[T]): Option[Seq[T]] = Some(x)
+  ...
+}
+```
+
+List对象包含一个接收可变数量的入参的apply方法。正是这个方法让你可以编写这样的表达式：
+
+```scala
+List()
+List(1, 2, 3)
+```
+
+对于数组操作，也能找到非常类似的定义，这些定义支持针对数组的“注入”和“提取”。
+
+### 26.2 提取器和样例类的对比
+
+样例类非常有用，但是有一个缺点：`它们将数据的具体表现类型暴露给了使用方`。这意味着构造方法模式中使用的类名跟选择器对象的具体类型相关。如果如下模式的匹配：
+
+```scala
+case C(...)
+```
+
+成功了，你就知道选择器表达式是C这个类的实例。
+
+提取器支持的模式跟被选择的对象的数据类型没有任何关系，这性质被称为**表现独立**。表现独立在开发大型项目时非常重要，因为它允许我们修改某些组件的实现类型，同时又不影响这些组件的使用方。
+
+样例类和提取器的区别：
+
+- 如果你的组件定义并输出了样例类，你就没法修改这些样例类，因为会影响使用方的代码。
+- 提取器没有这个问题，更改某个类型的表现形式不会影响使用方。
+- 样例类设置和定义比提取器简单很多，并且能带来更加高效的模式匹配，因为编译器能够对使用样例类的模式做更好的优化。
+- 提取器的unapply或unapplySeq几乎可以做任何事。
+- 如果样例类继承自一个sealed的基类，编译器会自动检查模式匹配是否全面，而对提取器不会有这样的检查。
+
+两者之间如何选择？刚开始构建的项目，总是可以从样例类开始i，随着需求的出现，再改成提取器。由于用提取器的模式和用样例类的模式在Scala中看上去完全相同，使用方中的代码看上去完全相同，使用方代码中的模式匹配仍然可以继续工作。
+
+### 26.7 正则表达式
+
+提取器一个尤其有用的应用场景是正则表达式。
+
+#### 26.7.1 组织正则表达式
+
+Scala从Java继承了正则表达式的语法。Scala的正则表达式类位于scala.util.matching包中。
+
+```scala
+import scala.util.matching.Regex
+```
+
+新的正则表达式值是通过将一个字符串传给Regex构造方法创建的。
+
+```scala
+scala> import scala.util.matching.Regex
+import scala.util.matching.Regex
+
+scala> val Decimal = new Regex("(-)?(\\d+)(\\.\\d*)?")
+Decimal: scala.util.matching.Regex = (-)?(\d+)(\.\d*)?
+```
+
+\\表示转义\，返回一个\。在代码中过多的转义字符可能不那么易读，可以用一下代码替换：
+
+```scala
+scala> val Decimal = new Regex("""(-)?(\d+)(\.\d*)?""")
+Decimal: scala.util.matching.Regex = (-)?(\d+)(\.\d*)?
+```
+
+一种更短的表达式为：
+
+```scala
+scala> val Decimal = """(-)?(\d+)(\.\d*)?""".r
+Decimal: scala.util.matching.Regex = (-)?(\d+)(\.\d*)?
+```
+
+换句话说，只要在字符串后面追加一个`.r`就能得到一个正则表达式。这样之所以可行，是因为StringOps类里有一个名为r的方法，将字符串转换为正则表达式。
+
+```scala
+package scala.runtime
+import scala.util.matching.Regex
+
+class StringOps(self: String) ... {
+  ...
+  def r = new Regex(self)
+}
+```
+
+#### 26.7.2 查找正则表达式
+
+可以用一下几种不同的操作符在字符串中查找正则表达式：
+
+- `regex findFirstIn str`：在字符串str中查找第一个正则表达式regex，以Option类型返回结果。
+- `regex findAllIn str`：在字符串str中查找正则表达式regex，以Iterator类型返回结果。
+- `regex findPrefixOf str`：在字符串str的一开始查找正则表达式regex，以Iterator类型返回结果。
+
+```scala
+scala> val input = "for -1.0 to 99 by 3"
+input: String = for -1.0 to 99 by 3
+
+scala> for (s <- Decimal findAllIn input) println(s)
+-1.0
+99
+3
+
+scala> Decimal findFirstIn input
+res8: Option[String] = Some(-1.0)
+
+scala> Decimal findPrefixOf input
+res10: Option[String] = None
+```
+
+#### 26.7.3 用正则表达式提取信息
+
+在Scala中每个正则表达式都定义一个提取器。该提取器用来识别正则表达式中的组匹配的子字符串，可以像下面拆解一个十进制的字符串：
+
+```scala
+scala> val Decimal(sign, integerpart, decimalpart) = "-1.23"
+sign: String = -
+integerpart: String = 1
+decimalpart: String = .23
+```
+
+正则表达式使用(-)?(\d+)(\.\d*)?中的三个组相对应的不跟就被作为模式的元素返回，进而被模式变量sign, integerpart, decimalpart匹配，吐过某个组缺失了，对应的元素就被设为null。
+
+```scala
+scala> val Decimal(sign, integerpart, decimalpart) = "-123"
+sign: String = -
+integerpart: String = 123
+decimalpart: String = null
+```
+
+也可以在for表达式中混用提取器和正则表达式的查找，例如对十进制的字符串做拆解：
+
+```scala
+for (Decimal(s, i, d) <- Decimal findAllIn input)
+  println("sign: " + s + ", integer: " + i + ", decimal: " + d)
+sign: -, integer: 1, decimal: .0
+sign: null, integer: 99, decimal: null
+sign: null, integer: 3, decimal: null
+```
