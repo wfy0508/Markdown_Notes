@@ -11433,3 +11433,358 @@ Scala代码通常不需要显式地给出字段的get和set方法，因为Scala�
 @native
 def beginCountdown() = {}
  ```
+
+## 28 使用XML
+
+...
+
+## 29 用对象实现模块化编程
+
+主要介绍如何把简单地额单例对象用作模块，然后再说明如何把特质和类用作对模块的抽象。这种抽象可以在不同的模块中配置，甚至是在同一个程序中多次配置。最后展示一种用特质把模块分拆到多个文件中的技术。
+
+### 29.1 问题描述
+
+随着程序规模的增大，以模块化的方式对其加以组织变得尤为重要。首先，如果能通过编译不同的模块来分别建造系统，可以帮助不同的小组互不干扰地工作。另外，如果允许把模块的某个实现拔掉换成另一个实现，这种插拔和替换是有益的，因为这使得系统的不同配置得以应用于不同的环境，例如开发者电脑上的单元测试、集成测试、预发准备以及线上部署等。
+
+举例来说，假定你需要实现一个使用数据库和消息服务的应用程序，在编写代码时，你或许希望能在你的桌面电脑上运行mock掉的数据库和消息服务的单元测试，它们模拟的这些服务足以应付测试而不需要与共享资源进行网络通信。集成测试中，你或许希望使用mock的消息服务但却要用现实版的开发者数据库。而在预发准备和线上部署的过程中你的组织可能会希望使用线上真实版本的数据库和消息服务。
+
+任何致力于达成这种模块化目标的技巧都需要满足一些最基本的要求。首先，应该有一个能够很好地分离接口和实现的模块结构。其次，应该有方式可以替换具有相同接口的模块，而不需要改变或重新编译依赖该模块的其他模块。最后，应该有方式可以把模块连接在一起这种连接的任务可以被认为是在配置（ configuring）该系统。
+
+解决这个问题的一种方式是依赖注入（dependency injection），这是一种由框架（比如企业Java社区较为流行的Spring或uice）支持的构建在Java平台之上的技术。拿Spring来说，它本质上让你可以用Java接口来表示模块的接口，并用Java类来实现。可以通过外部XM配置文件指定模块之间的依赖关系并最终将应用程序“连接”起来。尽管你也可以在Scala里使用Spring，从而以Spring的方式让你的Scala程序做到系统级的模块化，用Scala的我们还有别的选择。本章后续部分将展示如何把对象当成模块来使用，以此来达到我们想要的“大规模”的模块化，而无须用到任何外部框架。
+
+### 29.2 食谱应用程序
+
+假如正在设计一个食谱Web应用，想要把软件划分为不同的层次，包括领域层和应用层。在领域层，定义领域对象，用来保存业务概念和规则并封装将被持久化到外部关系数据库的状态。在应用层，将给出已提供给客户的服务的形式组织的API。应用层将通过协调任务以及派发工作给领域对象的方式来实现这些服务。
+
+需要让每一层都可以插入某些对象真实的或者mock的版本，这样就可以更容易地为应用程序编写单元测试。为了这个目的，可以将想要mock对象当做模块。
+
+既然代表关系型数据库的对象是在领域层内想要mock的东西之一，那么就应该把它做成模块。
+
+对于食谱应用程序，第一件事是对食物和食谱进行建模：
+
+```scala
+package org.stairwaybook.recipe
+abstract class Food(val name: String){
+  override def toString = name
+}
+
+class Recipe(
+  val name: String,
+  val ingredients: List[Food],
+  val instructions: String
+){
+  override def toString = name
+}
+```
+
+Food和Recipe代表了将要被持久化到数据库的实体，下面定义这两个类的一些单例对象，可以编写测试代码时使用：
+
+```scala
+package org.stairwaybook.recipe
+
+object Apple extends Food("Apple")
+object Orange extends Food("Orange")
+object Cream extends Food("Cream")
+object Sugar extends Food("Sugar")
+
+object FruitSalad extends Recipe(
+  "fruit salad",
+  List(Apple, Orange, Cream, Sugar),
+  "Stir it all togather."
+)
+```
+
+Scala使用对象来表示模块，所以可以从创建测试期间用mock数据库和浏览器模块的两个单例对象开始模块化你的程序。因为是mock，数据库模块只用简单的内存列表来支撑即可。这些对象的实现如下：
+
+```scala
+package org.stairwaybook.recipe
+object SimpleDatabase{
+  def allFoods = List(Apple, Orange, Cream, Sugar)
+  def foodNamed(name: String): Option[Food] = {
+    allFoods.find(_.name == name)
+  }
+  def allRecipes: List[Recipe] = List(FruitSalad)
+}
+
+object SimpleBrowser{
+  def recipesUsing(food: Food) = {
+    SimpleDatabase.allRecipes.filter(recipe => recipe.ingredients.contains(food))
+  }
+}
+```
+
+使用方式如下：
+
+```scala
+scala> val apple = SimpleDatabase.foodNamed("Apple").get
+applt: Food = Apple
+
+scala> SimpleBrowser.recipesUsing(apple)
+res0: List[Recipe] = List(fruit salad)
+```
+
+假定再添加一个对食物分类的类FoodCategory，来列出数据库中所有的类目：
+
+```scala
+package org.stairwaybook.recipe
+object SimpleDatabase{
+  def allFoods = List(Apple, Orange, Cream, Sugar)
+  
+  def foodNamed(name: String): Option[Food] = {
+    allFoods.find(_.name == name)
+  }
+  
+  def allRecipes: List[Recipe] = List(FruitSalad)
+
+  case class FoodCategory(name: String, foods: List[Food])
+
+  private var categories = List(
+    FoodCategory("fruits", List(Apple, Orange)),
+    FoodCategory("misc", List(Cream, Sugar))
+  )
+
+  def allCategories = categories
+
+}
+
+object SimpleBrowser{
+  def recipesUsing(food: Food) = {
+    SimpleDatabase.allRecipes.filter(recipe => recipe.ingredients.contains(food))
+  }
+
+  def displayCategory(category: SimpleDatabases.FoodCategory) = {
+    println(category)
+  }
+}
+```
+
+到这一步，后续还可以添加更多的类和方法。程序可以被切分为但力度向，可以认为它们是模块，这并不是什么新的内容，但是当考虑抽象概念时，就会变得非常有用。
+
+### 29.3 抽象
+
+尽管目前为止看到的例子的确把程序划分为不同的数据库和浏览器模块，尽管这个设计不够“模块化”。问题在于浏览器模块实质上是“硬链接”到数据库模块的：
+
+```scala
+SimpleDatabase.allRecipes.filter(recipe =>...
+```
+
+所以并不能在不修改和重新编译浏览器模块的情况下插入数据库模块的不同实现。而且，尽管SimpleDatabase模块没有指向SimpleBrowser模块的硬链接，目前也没有什么清晰的方式能够吧应用层配置成使用不同的浏览器模块实现。
+
+不过，当把这些模块模块变得更加可插拔的时候，很重要的一点就是避免了代码重复，因为可能有大量的代码可以在相同模块的不同实现之间共享。`如果模块是对象，那么模块的就是类`。就好比类描述了所有实例的公共部分一样，类也可以描述模块中它所有可能的配置中的公共部分。
+
+这样一来，浏览器定义变成了类，不再是对象。所用的数据库被指定为类的抽象成员。数据库也变成了类，包括尽量多的横跨所有数据库的公共逻辑，并声明了那些缺失的，必须有具体的数据库实现给出定义的部分。在本例中，所有的数据库模块都必须定义allFoods、allRecipes和allCategories，不过由于它们可能用任意需要的方式定义，因为这些方法必须在Database类中保持抽象。与此相反，foodNamed方法则可以在抽象Database类里实现。
+
+```scala
+abstract class Browser{
+  val database: Database
+
+  def recipesUsing(food: Food) = {
+    database.allRecipes.filter(recipe => recipe.ingredients.contains(food))
+  }
+
+  def displayCategory(category: database.FoodCategory) = {
+    println(category)
+  }
+}
+
+abstract class Database{
+  def allFoods: List[Food]
+  def allRecipes: List[Recipe]
+  def foodNamed(name: String) = allFoods.find(f => f.name == name)
+  case class FoodCategory(name: String, foods: List[Food])
+  def allCategories: List[FoodCategory]
+}
+
+object SimpleDatabase extends Database{
+  def allFoods = List(Apple, Orange, Cream, Sugar)
+  def allRecipes: List[Recipe] = List(FruitSalad)
+  private var categories = List(
+    FoodCategory("fruits", List(Apple, Orange)),
+    FoodCategory("misc", List(Cream, Sugar))
+  )
+  def allCategories = categories
+}
+```
+
+仍然可以像之前使用这些可插拔模块：
+
+```scala
+scala> val apple = SimpleDatabase.foodNamed("Apple").get
+apple: Food = Apple
+
+scala> object SimpleBrowser extends Browser{
+     | val database = SimpleDatabase
+     | }
+defined object SimpleBrowser
+
+scala> SimpleBrowser.recipesUsing(apple)
+res2: List[Recipe] = List(fruit salad)
+```
+
+现在可以创建另一个新的mock数据库，并在同一个浏览器中使用它：
+
+```scala
+object StudentDatabase extends Database{
+  object FrozenFood extends Food("FrozenFood")
+
+  object HeatItUp extends Recipe(
+    "heat it up",
+    List(FrozenFood),
+    "Microwave the 'food' 10 minutes."
+  )
+
+  def allFoods = List(FrozenFood)
+  def allRecipes = List(HeatItUp)
+  def allCategories = List(
+    FoodCategory("edible", List(FrozenFood))
+  )
+}
+
+object StudentBrowser extends Browser{
+  val database = StudentDatabase
+}
+```
+
+### 29.4 将模块拆分成特质
+
+模块通常比较大，因此不是个放在单个文件中。如果发生这种情况，可以使用特质把模块拆分为多个文件。例如，想要把执行分类操作的代码移到Database之外成为独立文件，可以为这段代码创建一个特质：
+
+```scala
+trait FoodCategories{
+  case class FoodCategory(name: String, foods: List[Food])
+  def allCategoried: List[FoodCategory]
+}
+```
+
+然后将这个特质混入Database中，而不用再定义FoodCategory和allCategories了：
+
+```scala
+abstract class Database extends FoodCategories{
+  def allFoods: List[Food]
+  def allRecipes: List[Recipe]
+  def foodNamed(name: String) = allFoods.find(f => f.name == name)
+}
+```
+
+可以尝试将SimpleDatabase划分为两个特质，一个是食物，一个是食谱，这样就可以如下定义SimpleDatabase：
+
+```scala
+object SimpleDatabase extends Database with SimpleFoods with SimpleRecipes
+```
+
+SimpleFoods特质的定义是没有问题的：
+
+```scala
+trait SimpleFoods{
+  object Pear extends Food("Pear")
+  def allFoods = List(Apple, Pear)
+  def allCategories = Nil
+}
+```
+
+但是如果想如下定义SimpleRecipes，就会有问题：
+
+```scala
+trait SimpleRecipes{
+  object FruitSalad extends Recipe(
+    "fruit salad",
+    List(Apple, Pear),  //Pear没有处于使用它的特质中，超出了作用域范围
+    "Mix is all togather."
+  )
+  def allRecipes = List(FruitSalad)
+}
+
+error: not found: value Pear
+    List(Apple, Pear),
+                ^
+```
+
+Pear没有处于使用它的特质中，超出了作用域范围。编译器并不知道SimpleReciples只能与SimpleFoods混搭在一起。
+
+不过有一种方式可以告诉编译器这个要求。Scala专门提供了自身类型(selftype)来应对这种情况。`从技术上讲，自身类型中提到this时，对于this的假定类型。从实用角度上讲，自身类型制定了对于特质能够混入具体类的要求`。如果你的特质仅能用于混入另一个或几个特定的特质，那么你可以指定那些特质作为自身类型。在这个例子中，指定一个SimpleFoods作为自身类型就已经足够了:
+
+```scala
+trait SimpleRecipes{
+  this: SimpleFoods =>
+  object FruitSalad extends Recipe(
+    "fruit salad",
+    List(Apple, Pear),
+    "Mix is all togather."
+  )
+  def allRecipes = List(FruitSalad)
+}
+```
+
+有了新的自身类型，Pear就可以使用了。Pear的引用被隐含地认为是this.Pear。这是安全的，因为任何混入了SimpleRecipes的具体类型都必须同时是SimpleFoods的子类型，也就是说Pear一定是它的成员，抽象子类和特质不用必须遵循这个限制，但因为它们不能使用new实例化，所以并不存在this.Pear引用失败的风险。
+
+### 29.5 运行时链接
+
+Scala模块可以在运行时被链接在一起，并且还可以根据运行时的计算决定哪些模块将被链接起来。下面展示了一个可以运行时选择数据库实现并打印出所有苹果食谱的小程序。
+
+```scala
+object GotApples{
+  def main(args: Array[String]){
+    val db: Database =
+      if (args(0) == "student")
+        StudentDatabase
+      else
+        SimpleDatabase
+  }
+
+  object browser extends Browser{
+    val database = db
+  }
+
+  val apple = SimpleDatabase.foodNamed("Apple").get
+  for (recipe <- browser.recipesUsing(apple))
+    println(recipe)
+}
+```
+
+如果使用SimpleDatabase，你将会找到一个salad的食谱。而如果使用学生数据库，你会发现根本没有找到Apple的是食谱。
+
+### 29.6 跟踪模块实例
+
+尽管使用的是相同的代码，上一节创建的不同浏览器仍然是分离的模块，每个模块都有自己的内容。SimpleDatabase中的FoodCategory和StudentDatabase中的FoodCategory是不同类：
+
+```scala
+scala> val category = StudentDatabase.allCategories.head
+category: StudentDatabase.FoodCategory = FoodCategory(edible,List(FrozenFood))
+
+scala> SimpleBrowser.displayCategory(category)
+<console>:14: error: type mismatch;
+ found   : StudentDatabase.FoodCategory
+ required: SimpleBrowser.database.FoodCategory
+       SimpleBrowser.displayCategory(category)
+                                     ^
+```
+
+如果想让两者个FoodCategory是同一个，可以吧FoodCategory定义移到类或者特质之外。有的时候两个类型相同，但是编译器却不能鉴别出来，你会看到编译器抛出的错误信息提示两个类型不同，虽然你知道它们是完全一致的。
+
+在这种情况下，使用**单例类型**来解决问题。例如在GoApples程序中，类型检查不知道db和browser.database是同一个类型，因此当你尝试在两个对象之间传递类目消息时：
+
+```scala
+object GoApples{
+  //一些定义
+  for (category <- db.allCategories)
+    browser.displayCategory(category)
+  ///...
+}
+
+GotApples2.scala:14: error: type mismatch;
+found : db.FoodCategory
+required: browser.database.FoodCategory
+browser.displayCategory(category)
+ˆ
+one error found
+```
+
+要避免这个错误，需要告诉类型检查器它们是同一个对象。可以通过下面代码实现：
+
+```scala
+object browser extends Browser{
+  val database: db.type = db
+}
+```
+
+这个定义中database的类型很古怪，db.type。结尾的“.type”表示它是单例类型。单例类型及其明确，它只保存一个对象，在本例中就是db指向的那个对象。通常这样的类型实在太过明确，以至于没有什么用处，这也是为什么编译器通常都不自动插入单例类型。但是在本例中，单例类型可以让编译器知道db和browser.database是同一个对象。
