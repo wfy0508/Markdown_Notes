@@ -11432,7 +11432,7 @@ Scala代码通常不需要显式地给出字段的get和set方法，因为Scala�
 ```scala
 @native
 def beginCountdown() = {}
- ```
+```
 
 ## 28 使用XML
 
@@ -11788,3 +11788,373 @@ object browser extends Browser{
 ```
 
 这个定义中database的类型很古怪，db.type。结尾的“.type”表示它是单例类型。单例类型及其明确，它只保存一个对象，在本例中就是db指向的那个对象。通常这样的类型实在太过明确，以至于没有什么用处，这也是为什么编译器通常都不自动插入单例类型。但是在本例中，单例类型可以让编译器知道db和browser.database是同一个对象。
+
+## 30 对象相等性
+
+### 30.1 Scala中的相等性
+
+Scala对相等性的定义和Java不同，Java有两种相等性比较：
+
+- **==操作符**：`对值而言`这自然是相等性，对`引用类型`而言则是对象一致性；
+- **equals方法**：是（用户定义的）`引用类型`的规约相等性。
+
+在Java编程中，对于初学者而言是以常见的陷进是在该用equals的地方使用==来比较对象。举例来说，即使在x，y拥有完全相等的字符和顺序，x == y得到false也不奇怪。
+
+Scala也有一个相等性判断方法用来表示对象一致性，不过用的并不多。此类相等性的判断，写作“`x eq y`”，当x和y引用同一个对象时为true。在Scala中：
+
+- **==**：用来表示每个类型“自然的”相等性。对于`值类型`而言，是对值的比较，和Java一样。对于`引用类型`，相当于equals。
+
+**可以重写新类型的equals方法从而重新定义==的行为**。这个方法总是会从Any类继承下来，除非重写，默认是想Java那样判断对象是否一致。因此，`equals`方法（以及==）默认和eq是一样的。不过可以通过在定义的类中重写equals方法的方式来改变其行为。
+
+- 没有办法直接重写==，因为它在Any中定义为final方法：
+
+```scala
+final def ==(that: Any): Boolean =
+  if (null eq this) {null eq that} else {this equals that}
+```
+
+### 30.2 编写相等性方法
+
+在面向对象的语言中，正确编写相等性方法是十分困难的。正如2007年的一篇论文(Declarative Object Identify Using Ration Types)指出：几乎所有的equals方法实现都有问题。这个问题很严重，因为很多其他代码逻辑都以相等性判断为基础。比如，如果一个类型C的相等性方法有问题，可能意味着你无法很有把握地将一个类型C的对象放到集合中。
+
+可能有两个相等的类型C的元素elem1和elem2，即`elem1 equals elem2`会得到true。尽管如此，由于经常会遇到equals方法实现有问题的情况，可能还会碰到如下问题：
+
+```scala
+val hashSet: Set[C] = new scala.collection.immutable.HashSet
+hashSet += elem1
+hashSet contains elem2 //返回false
+```
+
+重写equals方法时有四种常见的陷进，可能造成不一致：
+
+- 定义equals方法采用了错误的方法签名；
+- 修改了equals方法当并没有同时修改hashCode；
+- 用可变字段定义了equals方法；
+- 未能按同等关系equals方法。
+
+#### 30.2.1 以错误的签名定义equals方法
+
+为Point添加一个相等性判断方法：
+
+```scala
+class Point(val x: Int, val y: Int){
+  def equals(other: Point): Boolean =
+    this.x == other.x && this.y == other.y
+}
+```
+
+看上去没有什么问题：
+
+```scala
+scala> val p1, p2 = new Point(1, 2)
+p1: Point = Point@2862ca5
+p2: Point = Point@32967892
+
+scala> val q = new Point(21, 3)
+q: Point = Point@1f2616d3
+
+scala> p1 equals p2
+res13: Boolean = true
+
+scala> p1 equals q
+res14: Boolean = false
+```
+
+但是将放入集合，麻烦就来了：
+
+```scala
+scala> import scala.collection.mutable
+import scala.collection.mutable
+
+scala> val col1 = mutable.HashSet(p1)
+col1: scala.collection.mutable.HashSet[Point] = Set(Point@2862ca5)
+
+scala> col1 contains p2
+res16: Boolean = false
+```
+
+p1等于p2，为什么col1不包含p2呢？下面我们重新定义一个p2的副本：
+
+```scala
+scala> val p2a: Any = p2
+p2a: Any = Point@32967892
+
+scala> p1 equals p2a
+res17: Boolean = false
+```
+
+定义新的p2a，和p1是不相同的，可以看到p2a的类型为Any而不是Point。事实上，之前给出的equals方法并没有重写标准的equals，因为它们的类型不同。根类Any中定义个equals方法所用的类型是：
+
+```scala
+def equals(other: Any): Boolean
+```
+
+Point类的equals的参数类型是Point而不是Any，它`并没有重写Any类中的equals方法，而是一个重载的备选方法`。目前，Scala和Java中的重载都是根据参数的静态类型，而不是运行时的类型来解析的。因此只要参数的静态类型是Point，则调用的就是Point类中的equals方法，静态类型是Any的就调用根类中的equals方法。这就是为什么`p1 equals p2a`还是会得到出false了。这也是为什么HashSet的contains方法返回的是false。由于这个方法操作的是泛型的集合，它调用的是Obkject类的equals方法而不是Point中重载的变种。
+
+重新定义Point的equals方法：
+
+```scala
+override def equals(other: Any) = other match{
+  case that: Point => this.x == other.x && this.y == other.y
+  case _ => false
+}
+```
+
+但是这样并不是完美的方法，首先它检测other对象的类型是否是Point，如果是就比较两个坐标，否则就返回false。
+
+另一种陷进是试图重写==方法，这个方法在Any中定义为final，因此它是不能被重写的。有时候想重写，但是用了错误的签名：
+
+```scala
+def ==(other: Point): Boolean = ...
+```
+
+这样编译器不会报错，但并不是重写了==方法，**定义的==方法只是被当做`Any类中同名方法的重载`的变种**，容易代码不必要的麻烦。
+
+#### 30.2.2 修改equals但没有同时修改hashCode
+
+应用修改过后的equals方法，再来比较p1和p2a将会得到true。但是用hashSet.contains检测时，还是会返回false：
+
+```scala
+scala> val p1, p2 = new Point(1, 2)
+p1: Point = Point@359a9bf1
+p2: Point = Point@73f90886
+
+scala> val p2a: Any = p2
+p2a: Any = Point@73f90886
+
+scala> p1 equals p2a
+res18: Boolean = true
+
+scala> collection.mutable.HashSet(p1) contains p2
+res19: Boolean = false
+```
+
+这是因为重写了equals，但没有重写hashCode。
+
+注意上例中使用的HashSet。这意味着这个集合类中的元素会依据它们的哈希码被放进**哈希桶**中。contains检测首先决定要找的桶，然后将他们给定的元素同该桶中的所有元素进行比较。现在的情况是，最后这个版本的重写equals时并没有同时重写hashCode。因此hashCode仍然是AnyRef中的定义：**已分配对象的某种转换**。
+
+p1和p2的哈希码几乎肯定是不同的，尽管这两个点的值是相同的。不同的哈希码意味着它们几乎不可能被放进同一个桶中，所以在p1的那个桶中几乎永远也找不到p2。问题在于Point最后这个实现违背了Any类中定义hashCode方法的契约：**如果两个对象根据equals方法是相等的，那么对它们每一个调用hashCode方法都必须产出相同的整型结果**。
+
+hashCode和equals要一起重定义，hashCode只能依赖equals方法依赖的字段，下面是hashCode的定义：
+
+```scala
+class Point(val x: Int, val y: Int){
+  override def hashCode = (x, y).##  //##为计算哈希码的简写
+  override def equals(other: Any) = other match{
+    case that: Point => this.x == that.x && this.y == that.y
+    case _ => false
+  }
+}
+```
+
+### 30.2.3 用可变字段定义equals
+
+如果使用var代替val定义x和y，像如下定义：
+
+```scala
+class Point(var x: Int, var y: Int){
+  override def hashCode = (x, y).##  //##为计算哈希码的简写
+  override def equals(other: Any) = other match{
+    case that: Point => this.x == that.x && this.y == that.y
+    case _ => false
+  }
+}
+```
+
+就会带来奇怪的效果：
+
+```scala
+scala> val p = new Point(1, 2)
+p: Point = Point@5428bd62
+
+scala> val col1 = mutable.HashSet(p)
+col1: scala.collection.mutable.HashSet[Point] = Set(Point@5428bd62)
+
+scala> col1 contains p
+res20: Boolean = true
+```
+
+这看上去是没有什么问题，但是当修改p的x坐标时，麻烦就来了：
+
+```scala
+scala> p.x += 1
+
+scala> col1 contains p
+res22: Boolean = false
+```
+
+p去哪了？但是当时用迭代器检查时结果会更奇怪：
+
+```scala
+scala> col1.iterator contains p
+res24: Boolean = true
+```
+
+这是个不包含p的集合，但是p又在集合中！事实上，当x被修改之后，点对象p相当于被放到col1集合当中错误的哈希桶里。换句话说，原来那个哈希桶不再对应到这个点对象新的哈希值。某种意义上讲，p这个点对象被“挤出”了col1集合的“视野”，虽然它仍然是集合的一员。
+
+这个问题说明，如果equals和hashCode依赖于可变状态，对于潜在的用户带来问题。如果将这样的对象放入集合中，必须要给常小心不去修改被依赖的状态，而这并不容易做到。如果需要的比较牵扯对象当前的状态，通常应该取别的名字（类似equalsContent），而不是equals。
+
+#### 30.2.4 未能按等同关系定义equals方法
+
+根据scala.Any中的equals方法的契约约定，equals方法必须对非null对象实现对等关系：
+
+- 它是自反射的：对任何非空值x，表达式x.equals(x)应该返回true.
+- 它是对称的：对任何非空值x和y，x.equals(y)当且仅当y.equals(x)返回true时返回true。
+- 它是可传递的，对任何非空值x、y和z。如果x.equals(y)返回true且y.equals(z)返回true，则x.equals(z)应返回true。
+- 它是一致的。对任何非空值x和y。多次调用x.equals(y)返回值应该相同，只要勇于对象的equals比较的信息没有被修改过。
+- 对任何非空值x，x.equals(null)应该返回false。
+
+到目前为止，开发的Point类没有什么问题，是满足契约的。不过，当开始考虑子类时，事情就变得复杂了。如果给Point增加一个ColoredPoint子类，并添加了一个类型为Color的字段color：
+
+```scala
+object Color extends Enumeration{
+  val Red, Yellow, Green, Black = Value
+}
+
+class ColoredPoint(x: Int, y: Int, val color: Color.Value) extends Point(x, y){
+  override def equals(other: Any) = other match{ //问题：equals是不对称的
+    case that: ColoredPoint => this.color == that.color && super.equals(that)
+    case _ => false
+  }
+}
+```
+
+本例中，ColoredPoint并不需要重写hashCode，因为ColoredPoint的新的equals定义比Point中被重写的定义更加严格。也就是hashCode的契约依然合法。如果有两个带颜色相等，它们必须有相同的坐标，因此它们的hashCode也一定会相等的。
+
+如果只考虑ColoredPoint自身，equals方法用起来是没有问题的，但是一旦点和带颜色的点混在一起，equals契约就实效了。
+
+```scala
+scala> val p = new Point(1, 2)
+p: Point = Point@5428bd62
+
+scala> val cp = new ColoredPoint(1, 2, Color.Red)
+cp: ColoredPoint = ColoredPoint@5428bd62
+
+scala> p equals cp
+res25: Boolean = true
+
+scala> cp equals p
+res26: Boolean = false
+```
+
+这明显违背了对称性的契约。其实p和zp调用了两个不同的equals方法，对于集合类而言，失去对称性会带来无法预料的后果。
+
+```scala
+scala> mutable.HashSet[Point](p) contains cp
+res27: Boolean = true
+
+scala> mutable.HashSet[Point](cp) contains p
+res28: Boolean = false
+```
+
+针对这个问题修改为如下代码：
+
+```scala
+class ColoredPoint(x: Int, y: Int, val color: Color.Value) extends Point(x, y){
+  override def equals(other: Any) = other match{ //问题：equals不是可传递的
+    case that: ColoredPoint => this.color == that.color && super.equals(that)
+    case that: Point => that equals this
+    case _ => false
+  }
+}
+```
+
+然后测试一下：
+
+```scala
+scala> val redp = new ColoredPoint(1, 2, Color.Red)
+redp: ColoredPoint = ColoredPoint@5428bd62
+
+scala> val bluep = new ColoredPoint(1, 2 ,Color.Green)
+bluep: ColoredPoint = ColoredPoint@5428bd62
+
+scala> redp == p
+res29: Boolean = true
+
+scala> p == bluep
+res30: Boolean = true
+
+scala> redp == bluep
+res31: Boolean = false
+```
+
+符合对称性的契约，但是最后一行代码显式，它并不满足可传递性的契约。这里应该让equals方法更加严格，方式是总是将不同类型的对象当做是不同的。这可以通过修改Point类和ColoredPoint类的equals方法来实现。在Point中，可以添加一个额外的比较检查是否是另一个Point的运行时确切是Point类。
+
+```scala
+class Point(val x: Int, val y: Int) {
+  override def hashCode = (x, y).##
+  override def equals(other: Any) = other match {
+    case that: Point => this.x == that.x && this.y == that.y && this.getClass == that.getClass
+    case _ => false
+  }
+}
+```
+
+然后将ColoredPoint回退到首次定义的版本（这个版本违反了对称性要求）。
+
+新的定义既要满足对称性又要满足可传递性，因为现在不同类型的对象间的标胶判断总是返回false。因此一个带颜色的点永远不可能和一个点相等，这可能太过严格。考虑一下情况，以变通的方式定义一个新的点：
+
+```scala
+scala> val pAnon = new Point(1, 1) { override val y = 2 }
+pAnon: Point = $anon$1@5428bd62
+```
+
+p和pAnon是不相等的。因为p和pAnon相关联的java.lang.Class对象不同。p是Point，而pAnon是匿名的Point类的（子）类。但是很清楚的是p和pAnon指向的是同一个点，这样似乎不和情理。
+
+有一种方式可以重新定义类继承关系中若干级别上的相等性，同时不违背契约。就是在定义equals和hashCode之外，再多定义一个方法。它应该同时明确指出该类的对象不与任何定义了不同相等性方法的超类的对象相等，这是通过给每个重定义equals方法的类添加一个canEqual方法来实现：
+
+```scala
+def canEqual(other: Any): Boolean
+```
+
+如果other对象是重定义了canEqual方法的类的实例，则该方法应该返回true，否则返回false。equals方法中调用canEqual来确保对象可以进行双向比较：
+
+```scala
+class Point(val x: Int, val y: Int) {
+  override def hashCode = (x, y).##
+  override def equals(other: Any) = other match {
+    case that: Point => this.x == that.x && this.y == that.y && (that canEqual this)
+    case _ => false
+  }
+
+  def canEqual(other: Any) = other.isInstanceOf[Point]
+}
+
+class ColoredPoint(x: Int, y: Int, val color: Color.Value) extends Point(x, y){
+  override def equals(other: Any) = other match{ //问题：equals不是可传递的
+    case that: ColoredPoint => this.color == that.color && super.equals(that) && (that canEqual this)
+    case _ => false
+  }
+
+  override def canEqual(other: Any) = other.isInstanceOf[ColoredPoint]
+}
+```
+
+根据新的定义就是另外一个对象要能够与这个对象相等，取决于canEqual方法。根据Point的canEqual方法的实现，所有的实力都可以相等。
+
+两个类中定义的equals方法符合契约规则，相等性是对称性的，也是可传递的。
+
+```scala
+scala> val p = new Point(1, 2)
+p: Point = Point@5428bd62
+
+scala> val cp = new ColoredPoint(1, 2, Color.Red)
+cp: ColoredPoint = ColoredPoint@5428bd62
+
+scala> val pAnon = new Point(1, 1) {override val y = 2}
+pAnon: Point = $anon$1@5428bd62
+
+scala> val col1 = List(p)
+col1: List[Point] = List(Point@5428bd62)
+
+scala> col1 contains cp
+res32: Boolean = false
+
+scala> col1 contains pAnon
+res33: Boolean = true
+
+scala> p equals pAnon
+res34: Boolean = true
+```
+
+这些例子展示，度过超类的equals实现定义并调用了canEqual，则实现子类的程序员可以决定它们的子类是否可以与超类的实例相等。由于子类ColoredPoint重写了Point的canEqual方法，所以一个带颜色的点和一个普通的点是不可能相同的。但pAnon引用的匿名子类并没有重写canEqual方法，它的实例可以与Point的实例相等。
