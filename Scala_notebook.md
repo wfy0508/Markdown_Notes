@@ -11798,7 +11798,7 @@ Scala对相等性的定义和Java不同，Java有两种相等性比较：
 - **==操作符**：`对值而言`这自然是相等性，对`引用类型`而言则是对象一致性；
 - **equals方法**：是（用户定义的）`引用类型`的规约相等性。
 
-在Java编程中，对于初学者而言是以常见的陷进是在该用equals的地方使用==来比较对象。举例来说，即使在x，y拥有完全相等的字符和顺序，x == y得到false也不奇怪。
+在Java编程中，对于初学者而言是以常见的陷进，是在该用equals的地方使用==来比较对象。举例来说，即使在x，y拥有完全相等的字符和顺序，`x == y`得到false也不奇怪。
 
 Scala也有一个相等性判断方法用来表示对象一致性，不过用的并不多。此类相等性的判断，写作“`x eq y`”，当x和y引用同一个对象时为true。在Scala中：
 
@@ -11806,7 +11806,7 @@ Scala也有一个相等性判断方法用来表示对象一致性，不过用的
 
 **可以重写新类型的equals方法从而重新定义==的行为**。这个方法总是会从Any类继承下来，除非重写，默认是想Java那样判断对象是否一致。因此，`equals`方法（以及==）默认和eq是一样的。不过可以通过在定义的类中重写equals方法的方式来改变其行为。
 
-- 没有办法直接重写==，因为它在Any中定义为final方法：
+- 没有办法直接重写==方法，因为它在Any中定义为final方法：
 
 ```scala
 final def ==(that: Any): Boolean =
@@ -11815,7 +11815,7 @@ final def ==(that: Any): Boolean =
 
 ### 30.2 编写相等性方法
 
-在面向对象的语言中，正确编写相等性方法是十分困难的。正如2007年的一篇论文(Declarative Object Identify Using Ration Types)指出：几乎所有的equals方法实现都有问题。这个问题很严重，因为很多其他代码逻辑都以相等性判断为基础。比如，如果一个类型C的相等性方法有问题，可能意味着你无法很有把握地将一个类型C的对象放到集合中。
+在面向对象的语言中，正确编写相等性方法是十分困难的。正如2007年的一篇论文(*Declarative Object Identify Using Ration Types*)指出：几乎所有的equals方法实现都有问题。这个问题很严重，因为很多其他代码逻辑都以相等性判断为基础。比如，如果一个类型C的相等性方法有问题，可能意味着你无法很有把握地将一个类型C的对象放到集合中。
 
 可能有两个相等的类型C的元素elem1和elem2，即`elem1 equals elem2`会得到true。尽管如此，由于经常会遇到equals方法实现有问题的情况，可能还会碰到如下问题：
 
@@ -11827,10 +11827,10 @@ hashSet contains elem2 //返回false
 
 重写equals方法时有四种常见的陷进，可能造成不一致：
 
-- 定义equals方法采用了错误的方法签名；
-- 修改了equals方法当并没有同时修改hashCode；
-- 用可变字段定义了equals方法；
-- 未能按同等关系equals方法。
+- **定义equals方法采用了错误的方法签名**；
+- **修改了equals方法当并没有同时修改hashCode**；
+- **用可变字段定义了equals方法**；
+- **未能按同等关系equals方法**。
 
 #### 30.2.1 以错误的签名定义equals方法
 
@@ -11947,7 +11947,7 @@ class Point(val x: Int, val y: Int){
 }
 ```
 
-### 30.2.3 用可变字段定义equals
+#### 30.2.3 用可变字段定义equals
 
 如果使用var代替val定义x和y，像如下定义：
 
@@ -12001,7 +12001,7 @@ res24: Boolean = true
 - 它是自反射的：对任何非空值x，表达式x.equals(x)应该返回true.
 - 它是对称的：对任何非空值x和y，x.equals(y)当且仅当y.equals(x)返回true时返回true。
 - 它是可传递的，对任何非空值x、y和z。如果x.equals(y)返回true且y.equals(z)返回true，则x.equals(z)应返回true。
-- 它是一致的。对任何非空值x和y。多次调用x.equals(y)返回值应该相同，只要勇于对象的equals比较的信息没有被修改过。
+- 它是一致的。对任何非空值x和y，多次调用x.equals(y)返回值应该相同，只要勇于对象的equals比较的信息没有被修改过。
 - 对任何非空值x，x.equals(null)应该返回false。
 
 到目前为止，开发的Point类没有什么问题，是满足契约的。不过，当开始考虑子类时，事情就变得复杂了。如果给Point增加一个ColoredPoint子类，并添加了一个类型为Color的字段color：
@@ -12158,3 +12158,123 @@ res34: Boolean = true
 ```
 
 这些例子展示，度过超类的equals实现定义并调用了canEqual，则实现子类的程序员可以决定它们的子类是否可以与超类的实例相等。由于子类ColoredPoint重写了Point的canEqual方法，所以一个带颜色的点和一个普通的点是不可能相同的。但pAnon引用的匿名子类并没有重写canEqual方法，它的实例可以与Point的实例相等。
+
+### 30.3 定义参数化类型的相等性
+
+前面示例中的equals方法都以模式匹配开始，该模式匹配测试操作数的类型是否符合包含equals方法的类的类型。当类被参数化时，需要对该方案进行一些调整。
+
+以二叉树为例，定义一个抽象Tree类和两个可选实现EmptyTree对象和代表非空树的Branch类：
+
+```scala
+trait Tree[+T]{
+  def elem: T
+  def left: Tree[T]
+  def right: Tree[T]
+}
+
+object EmptyTree extends Tree[Nothing]{
+  def elem = throw new NoSuchElementException("EmptyTree.elem")
+  def left = throw new NoSuchElementException("EmptyTree.left")
+  def right = throw new NoSuchElementException("EmptyTree.right")
+}
+
+class Branch[+T](
+  val elem: T,
+  val left； Tree[T],
+  val right: Tree[T]
+) extends Tree[T]
+```
+
+现在我们将向这些类添加equals和hashCode方法。为Tree树本身不需要做什么，因为我们假设这些方法是为抽象类的每个实现单独实现的。对于EmptyTree，仍然没有什么要做的，因为EmptyTree从AnyRef继承的equals和hashCode的默认实现工作得很好，毕竟空树EmptyTree只等于它自己。
+
+但是为Branch添加equals和hashCode需要定义一些操作，因为一个Branch要等于另一个Branch，需要有相同的元素和左右节点：
+
+```scala
+class Branch[T](
+  val elem: T,
+  val left: Tree[T],
+  val right: Tree[T]
+) extends Tree[T]{
+  override def equals(other: Any) = other match{
+    case that: Branch[T] => this.elem == that.elem &&
+                            this.left == that.left &&
+                            this.right == that.right
+    case _ => false
+  }
+}
+```
+
+编译这段代码，编译器会抛出“unchecked”告警，可以在编译时加上-unchecked选项打印出原因：
+
+```scala
+$ fsc unchecked
+Tree.scala
+Tree.scala:14: warning: non variable typeargument
+T in type
+pattern is unchecked since it is eliminated by erasure
+    case that: Branch[T] => this.elem == that.elem &&
+               ˆ
+```
+
+定义equals时，对Branch[T]使用了模式匹配，然而系统只检查other引用(某种形式的)Branch，它不能检查Tree的元素类型是否为T。就如19章所述：类型参数的元素类型在编译器编译阶段被擦除了，在运行时时是不可用的。
+
+幸运的是，在比较两个Branch时，并不需要检查它们是否具有相同的元素类型。具有不同元素类型的两个分支很可能是相等的，只要它们的字段是相同的。一个简单的例子是由一个Nil元素和两个空子树组成的分支。可以认为任意两个这样的分支是相等的，无论它们具有什么静态类型：
+
+```scala
+scala> val b1 = new Branch[List[String]](Nil, EmptyTree, EmptyTree)
+b1: Branch[List[String]] = Branch@794eeaf8
+
+scala> val b2 = new Branch[List[Int]](Nil, EmptyTree, EmptyTree)
+b2: Branch[List[Int]] = Branch@59e082f8
+
+scala> b1 == b2
+res0: Boolean = true
+```
+
+上面的例子说明，编译器并不会检查Branch的类型参数T，否则`b1 == b2`应该返回false。
+
+在这两种可能的比较结果中，哪一种更自然，可能意见不一。最后，这取决于表示类的心智模型。类型参数只在编译阶段出现的模型中，很自然地认为两个分支值b1和b2是相等的。在类型参数是对象值的一部分的模型中，同样很自然地认为它们是不同的。由于Scala采用类型擦除模型，类型参数在运行时不被保留，因此b1和b2自然被认为是相等的。
+
+如果想让编译器在编译阶段不再抛出“unchecked”告警，可将Branch的类型参数T改为t：
+
+```scala
+case that: Branch[t] => this.elem == that.elem &&
+                        this.left == that.left &&
+                        this.right == that.right
+```
+
+`t`代表类型参数的类型是未知的。这个模式匹配中`case that: Branch[t] =>`对于任何类型的编译都会成功。`t`还可以使用`_`替代：
+
+```scala
+case that: Branch[_] =>
+```
+
+下面就是给Branch定义hashCode和CanEqual方法：
+
+```scala
+class Branch[T](
+  val elem: T,
+  val left: Tree[T],
+  val right: Tree[T]
+) extends Tree[T]{
+  override def equals(other: Any) = other match{
+    case that: Branch[_] => this.elem == that.elem &&
+                            this.left == that.left &&
+                            this.right == that.right
+    case _ => false
+  }
+
+  override def hashCode: Int = (elem, left, right).##
+
+  def canEqual(other: Any) = other match{
+    case that: Branch[_] => true
+    case _ => false
+  }
+}
+```
+
+canEqual实现使用了模式匹配，也可以用下面定义：
+
+```scala
+def canEqual(other: Any) = other.isInstanceOf[Branch]
+```
