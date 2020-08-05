@@ -103,6 +103,8 @@ Maven会将下载的类库（jar包）放置到本地的一个目录下（一般
    
 ## 3 创建Flink初始模板项目
 
+### 3.1 使用MVN命令行创建
+
 1. 在命令行中，使用如下的命令快速创建一个空白Flink项目：
 
 ```shell
@@ -137,6 +139,44 @@ Maven会将下载的类库（jar包）放置到本地的一个目录下（一般
    ```
 
    示例项目是一个Maven项目，它包含两个类：StreamingJob和BatchJob，分别是DataStream和DataSet程序的基本框架程序。类中的main方法是程序的入口点，用于内部测试/执行和适当的部署。这个基本框架程序然后可以导入到IDE中进行开发。
+   
+### 3.2 使用IDEA创建
+
+   File -> Project ->  Maven -> Create  from archetype -> org.apache.flink:flink-quickstart-scala。
+
+命名包名（类似org.examples.flink），版本，主函数名称，在依赖项添加flink包中的lib和opt。
+
+新建脚本：
+
+```scala
+package org.wfy.flink
+
+import org.apache.flink.api.java.utils.ParameterTool
+import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+
+object StreamWordCountApp {
+  def main(args: Array[String]): Unit = {
+    val tool: ParameterTool = ParameterTool.fromArgs(args)
+    val host: String = tool.get("host")
+    val port: Int = tool.get("port").toInt
+
+
+    val env: StreamExecutionEnvironment = StreamExecutionEnvironment.getExecutionEnvironment
+
+    val textDstream: DataStream[String] = env.socketTextStream(host, port)
+
+    import org.apache.flink.api.scala._
+
+    val dStream: DataStream[(String, Int)] = textDstream.flatMap(_.split(" ")).filter(_.nonEmpty).map((_, 1)).keyBy(0).sum(1)
+    dStream.print()
+
+    env.execute()
+  }
+
+}
+```
+
+
 
 ## 4 打包项目
 
@@ -146,9 +186,30 @@ Maven会将下载的类库（jar包）放置到本地的一个目录下（一般
 
 ```shell
 > cd E:/FlinkProjects/FlinkScalaBlank
-> mvn clean package
+> mvn clean package -DskipTests=true
 ```
 
 2、在项目目录下，会生成一个target目录。我们打包的结果文件就放在这个目录中，可以转到相应的文件夹去查看，也可以直接在命令行下执行dir命令查看。
 
 3、查看target文件夹，将会发现一个JAR文件，其中包含我们应用程序以及相关的依赖项（连接器和库）。
+
+## 5 执行脚本
+
+1. 将jar包传入Linux，启动本地监听端口`nc -l 9000`。
+
+2. `cd flink/log`，跟踪log日志`tail -f flink-hadoop-taskexecutor-1-wfy.out `
+3. 执行脚本：
+
+```scala
+flink run -c org.wfy.flink.StreamWordCountApp /usr/local/mvn-flink-1.0-SNAPSHOT.jar --host 127.0.0.1 --port 9000
+```
+
+4. 在监听端口命令行输入单词，就可在第5步的窗口，看到类似如下结果：
+```scala
+(hello,1)
+(world,1)
+(hello,2)
+(you,1)
+(flink,1)
+```
+
