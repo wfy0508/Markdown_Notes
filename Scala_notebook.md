@@ -12826,4 +12826,8 @@ scala> stream.map(f).toArray
 res6: Array[Int] = Array(2, 3, 4)
 ```
 
+<<<<<<< HEAD
 有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
+=======
+有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
+>>>>>>> aabe36bddb72317148192edbf433bebc001507d0
