@@ -12792,7 +12792,7 @@ scala> val f = (i: Int) => i + 1
 f: Int => Int = $$Lambda$1318/221029289@2b26d289
 ```
 
-尽管f跟之前传入stream.map的函数字面量有着相同的类型，并不能在要求IntUnaryOperator的地方使用f:
+尽管f跟之前传入`stream.map`的函数字面量有着相同的类型，并不能在要求IntUnaryOperator的地方使用f:
 
 ```scala
 scala> val stream = Arrays.stream(Array(1, 2, 3))
