@@ -1381,7 +1381,7 @@ val half =
 
 #### 7.4.2 捕获异常
 
-**catch子句**
+- catch子句
 
 ```scala
 import java.io.FileReader
@@ -1396,7 +1396,7 @@ try{
 }
 ```
 
-**finally子句**
+- finally子句
 
 ```scala
 import java.io.FileReader
@@ -1409,7 +1409,7 @@ try{
 }
 ```
 
-**交出值**
+- 交出值
 
 跟Scala其他控制结构一样，`try-catch-finally`结构最终返回一个值。无论怎样，`finally`最终都会执行，这样就会造成`finally`子句的返回值可能会改写任何之前的`try`代码块或某个`catch`子句中产生的值。
 
@@ -2074,13 +2074,13 @@ def approximateLoop(initialGuess: Double): Double = {
 
 但实际上，编译器会对第一种函数式的`approximate`定义应用一项重要优化。像`approximate`这种在函数最后一步`直接调用自身`，称为`尾递归(tail recursive)`。Scala编译器检测到尾递归，并在用新的值更新函数参数后，用返回函数开头的跳转替换它，类似于循环的实现方式。
 
-**跟踪尾递归**
+- 跟踪尾递归
 
 尾部递归函数不会为每个调用构建新的堆栈帧，所有的调用都会在一个栈帧中执行。这可能会让程序员感到惊讶，因为他们正在检查程序失败的堆栈跟踪。
 
 ```scala
 def boom(x: Int): Int = {
-  if (x == 0) throw new Exception("boom!") 
+  if (x == 0) throw new Exception("boom!")
   else boom(x - 1) +1
   }
 boom: (x: Int)Int
@@ -2117,7 +2117,7 @@ java.lang.Exception: bang!
 -g:notailcalls
 ```
 
-**尾递归的限制**
+- 尾递归的限制
 
 Scala中尾递归的使用相当有限，因为JVM指令集使得实现更高级形式的尾递归非常困难。**Scala只优化直接递归回调用相同函数的调用**。如果递归是间接的，就像下面两个相互递归的函数一样，那么就不可能进行优化。
 
@@ -3757,7 +3757,7 @@ package bobsrockets{
   }
 
   class Ship{
-    val nav = new navigation.Navigator 
+    val nav = new navigation.Navigator
     //和navigation同在bobsrockets中，不用写为bobsrockets.navigation.navigator
   }
 
@@ -12826,8 +12826,4 @@ scala> stream.map(f).toArray
 res6: Array[Int] = Array(2, 3, 4)
 ```
 
-<<<<<<< HEAD
 有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
-=======
-有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
->>>>>>> aabe36bddb72317148192edbf433bebc001507d0
