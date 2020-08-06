@@ -12385,3 +12385,445 @@ class Rational(n: Int, d: Int){
     if (denom == 1) numer.toString else numer + "/" + denom
 }
 ```
+
+在使用这种方法编写hashCode方法时需要记住的一点，就是hashCode好坏要看你构建它用到的哈希码的好坏，也就是说通过调用对象中相关字段的hashCode得到的值。有时可能除了在字段上调用hashCode之外还需要做些额外的事情才能得到该字段有用的哈希码。举例来说，如果某个字段是集合，或许希望这个字段的哈希码是基于集合类中的所有元素的。如果字段是Vector、List、Set、Map或Tuple，可以简单地调用字段的hashCode，因为这些类的equals和hashCode方法被重写过，会考虑包含的元素。但是对于Array而言并不是这样，它们在计算哈希码时并不会考虑元素。因此，对数组而言，应该将每个元素当做是对象的字段，主动调用每个元素的hashCode，或者将数组传递给单例对象java.util.Arrays的某一个hashCode方法。
+
+最后，如果发现一个特定的哈希码计算影响到程序的性能，也可以考虑将哈希码缓存起来，如果对象是不可变的，可以在对象创建时计算哈希码并保存到一个字段中。可以简单地通过val而不是def重写hashCode来做到：
+
+```scala
+override val hashCode: Int = (numer, denom).##
+```
+
+这种方法是用内存换取计算时间，因为每个不可变的实例将会多出一个字段来保存缓存的哈希码值。
+
+## 31 结合Scala和Java
+
+### 31.1 从Java使用Scala
+
+大多数时候，从源码层面考虑Scala就可以了。不过如果知道一些Scala到Java的翻译细节，会对系统运行有更全面的理解。进一步说，如果从Java调用Scala代码，将会知道从Java的角度看Scala代码长什么样。
+
+#### 31.1.1 一般原则
+
+Scala的实现方式是将代码翻译为标准的Java字节码。Scala的特性尽可能地直接映射为相对等的Java特性。举例来说，Scala的类、方法、字符串和异常等和它们在Java中的对应概念一样编译成Java字节码。
+
+为了实现这一点，在设计Scala过程中，有时候需要作出艰难的抉择。例如，在运行期使用运行期类型解析确定重载方法，而不是在编译期决定，也许是个不做的方法，但是这样的设计会破坏Java的重载解析，使得混用Java和Scala变得更加难以应对。在这个问题上，Scala和Java的重载解析保持一致，因而Scala的方法和方法调用可以直接与Java的方法和方法的调用相对应。
+
+另外，Scala也有一些其他特性，如特质在Java中没有与之相当的对应。同样地，Scala和Java都有泛型，但是两者的实现细节是不同的。对于冲突的语言特性，Scala代码无法直接映射为Jaa语法结构，因此必须结合Java现有的特性来进行编码。
+
+对于不能直接映射的特性，编码并不是固定的。目前进行的工作是尽量使这个翻译尽可能简单。可以使用javap这样的工具查看.class文件来获取当前Scala编译器使用的翻译。
+
+#### 31.1.2 值类型
+
+类似Int这样的值类型翻译成Java有两种方式。只要可能，编译器会将Scala的Int翻译为Java的int以获取更好的性能。但有时做不到，因为编译器不确定它在翻译的是一个Int还是另外某种数据类型。比如List[Any]中可能只有Int型的元素，单边一起没有办法确认这一点。
+
+对于这样的类型，编译器不确定某个对象是不是值类型，而是会使用对象并依赖相应的包装类。如java.lang.Integer这样的包装类允许一个值类型被包装在Java对象中，由需要对象的代码操作。
+
+#### 31.1.3 单例对象
+
+Java中并没有单例对象，但是有静态方法。`Scala对单例对象的翻译采用了静态和实例方法相结合的方式`。每一个Scala单例对象，编译器都会为这个对象创建一个同名并加美元符号的Java类。比如定义了一个App的单例对象，编译器产出一个名为`App$`的java类，这个类拥有Scala单例对象的所有方法和字段，这个Java类同时还有一个名为`MODULES$`的静态对象，保存该类在运行期创建的一个实例。
+
+```scala
+object App{
+  def main(args: Array[String]) = {
+    println("Hello, world!")
+  }
+}
+```
+
+Scala将会生成一个Java类App$，具体如下：
+
+```java
+$ javap App$
+public final class App$ extends java.lang.Object implements scala.ScalaObject{
+  public static final App$ MODULES$;
+  public static {};
+  public App$();
+  public void main(java.lang.String[]);
+  public int $tag();
+}
+```
+
+如果只是一个单例对象，而没有与之对应的同名的类，编译器创建一个名为App的Java类，这个类对于每个Scala单例对象的方法都有一个静态的转发方法与之对应：
+
+```java
+$ javap App
+Complied from "App.scala"
+public final class App extends java.lang.Object{
+  public static final int $tag();
+  public static final void main(java.lang.Strng[]);
+}
+```
+
+相反，如果确实有一个名为App的类，Scala会创建一个对应的Java类App来保存这个类的成员。这种情况下，就不会添加任何转发到同名单例对象的方法，Java代码必须通过`MODULES$`字段来访问这个单例对象。
+
+#### 31.1.4 作为特质的接口
+
+编译任何特质都会创建一个同名的Java接口。这个接口可以作为Java类型使用，可以通过这个类型的变量来调用Scala对象的方法。
+
+在Java中实现一个特质则完全是另一回事。`如果定义的Scala特质只包含抽象方法，这个特质会直接翻译成Java接口，不需要任何其他代码`。
+
+### 31.2 注解
+
+#### 31.2.1 标准注解的额外效果
+
+对于有一些注解，编译器在针对Java平台编译时会产生额外的信息。当编译器看到这样的注解时，会首先根据一般Scala原则去处理，然后针对Java做一些额外的工作。
+
+- **@deprecated**：编译器会为产生的代码添加Java自己对应的注解。
+- **@Volatile**：Scala与Java的处理机制完全一样。
+- **@serializable**：会加上Java的Serialzable接口，@SerialVersionUID(1234L)会被转换为Java的字段定义`private final static long SerialVersionUID = 1234L`。任何标记为**@trainsient**的变量会被加上Java的**transient**修饰符。
+
+#### 31.2.2 抛出的异常
+
+Scala并不检查抛出的异常是否被捕获。也就是Scala中并没有throws声明相对应的定义，`所有Scala方法都被翻译成没有声明任何抛出异常的Java方法`。
+
+声明抛出异常这个特性之所以被Scala排除在外，是因为Java中人们对他的体验并不是很全面。由于用throws语句注解方法是个沉重的负担，因此许多开发者都编写吃掉并丢弃异常的代码，仅仅是为了在不增加所有这些throws语句的情况下让代码编译通过。
+
+有时候与Java对接，可能需要编写对Java友好的注解，用于描述某个方法可能抛出的异常。比如每个RMI远程接口中的方法都需要throws子句中提到的java.io.RemoteException。因此希望带有抽象方法顶一个额Scala特质编写RMI接口，需要在这些方法的throws子句中列出RemoteException。为了达成这个目的，就要用@throw注解定义的方法：
+
+```scala
+import java.io._
+class Reader(fname: String){
+  private val in = new BufferReader(new FileReader(fname)
+  )
+
+  @throws(classOf[IOException])
+  def read() = in.read()
+}
+```
+
+从Java来看就是：
+
+```java
+$ javap Reader
+Comlied from "Reader.scala"
+public class Reader extends java.lang.Object impliments scala.ScalaObject{
+  public Reader(java.lang.String);
+  public int read() throws java.io.Exception;
+  public int $tag();
+}
+```
+
+#### 31.2.3 Java注解
+
+Java框架中的胡姐可以直接在Scala代码中使用。任何Java框架都会看到你编写额注解，就好像使用Java编写的一样。
+
+例如，编写一个Test注解：
+
+```scala
+import org.junit.Test
+import org.junit.Assert.assertEquals
+
+class SetTest{
+  @Test
+  def testMultiAdd = {
+    val set = Set() + 1 + 2 +3 + 1 + 3
+    assertEquals(2, set.size)
+  }
+}
+```
+
+通过命令行来执行：
+
+```scala
+$ scala -cp junit-4.3.1.jar:. org.junit.runner.JUnitCore SetTest
+
+JUnit version 4.3.1
+.
+OK (1 test)
+```
+
+#### 31.2.4 编写自定义注解
+
+为了让注解对Java反射可见，必须用Java的语法编写并用javac编译。对于这样的用力而言，用Scala来编写注解看上去没有什么帮助，因此标准的编译器不支持这样做，这背后的原因是Scala的支持将不可避免地会无法实现Java注解的全部功能，而且Scala可能会在某类拥有自己的反射，而你可能像使用Scala反射来访问Scala的注解。
+
+```java
+import java.lang.annoation.*
+@Retention(RetentionPolicy.RUNTIMEE)
+@Target(ElementType.METHOD)
+public @interface Ignore{}
+```
+
+使用javac编译上述代码之后，可以像下面一样来使用该注解：
+
+```scala
+object Tests{
+  @Ignore
+  def testData = List(0, 1, -1, 5, -5)
+  def test1 = {
+    assert(testData == (testData.head :: testData.tail))
+  }
+  def test2 = {
+    assert(testData.contains(testData.head))
+  }
+}
+```
+
+test1和test2都是测试方法，近端testData以test开头，它实际上应该被忽略。
+
+为了查看这些注解是否被用到，可以用Java反射API。下面代码示例展示它是如何工作的：
+
+```scala
+object FindTests{
+  def main(args: Array[String]){
+    for {
+      method <- Tests.getClass.getMethods
+      if method.getName.startsWith("test")
+      if method.getAnnotation(classOf[Ignore]) == null
+    }{
+      println("found a test method: " + method)
+    }
+  }
+}
+```
+
+getClass和getMethods都是普通的反射方法。。与注解特定的部分是对getAnnotation方法的使用，许多反射对象都有一个getAnnotation方法来查找特定类型的注解。本例中查找的是新的类型Ignore类型的注解。由于这时Java API，是否成功取决于结果是null还是实际的注解对象。
+
+代码运行后的结果如下：
+
+```bash
+$ src scalac -d /usr/local/src Tests.scala FindTests.scala Ignore.java
+$ src javac -cp /usr/local/src -d /usr/local/src Ignore.java
+$ src scala -cp /usr/local/src FindTests
+found a test method: public void Tests$.test1()
+found a test method: public void Tests$.test2()
+```
+
+注意，以Java反射的视角来看这些方法位于`Test$`类而非Test类中。如本章一开始讲的那样，Scala的单例对象的实现位于一个名称后增加美元符号的Java类中，对本例而言，Tests的实现位于类`Tests$`中。
+
+在使用Java注解时必须遵循它们所规定的的限制。比如，**在注解的参数中，只能使用常量，而不能使用表达式**。能使用`@serial(1234)`，但是不能使用`@serial(x * 2)`，因为`x * 2`不是常量，而是表达式。
+
+### 31.3 通配类型
+
+所有Java类型在Scala中都有对等的概念。这是必要的，因为只有这样的Scala代码才能访问任何合法的Java类。大多数时候翻译都很直接了当，比如Java中的`Iterator<Component>`翻译为Scala就是`Iterator[Component]`。但是某些情况下Scala类型不一定满足要求，比如`Iterator<?>`或者`Iterator<? extends Component>`的怎么翻译？对于类型参数的原始类型Iterator又能做什么？对于通配类型和原始类型，Scala使用一种额外的叫作**通配类型(wildcard type)**来表示。
+
+通配类型的编写方法就是通过*占位符语法*，如`(_ + 1)`等效于`(x => x + 1)`，`Iterator[_]`代表元素类型未知的Iterator。
+
+也可以在使用占位符是插入上界和下界，例如，`Iterator[_ <: Component]`，这个类型表示的就是Iterator的元素类型必须是Component的子类型。
+
+对于简单用例而言，可以忽略通配符，直接调用基类型的方法，如下例子：
+
+```java
+public class Wild{
+  public Collection<?> contents{
+    Collection<String> stuff = new Vector<String>();
+    stuff.add("a");
+    stuff.add("b");
+    stuff.add("see");
+    return stuff;
+  }
+}
+```
+
+如果在Scala中访问这个类，将会看到它有一个通配类型：
+
+```scala
+scala> val contents = (new Wild).contents
+contents: java.util.Collection[_] = [a, b, see]
+```
+
+如果想要知道集合中有多少元素，可以简单地忽略通配部分，并像平常一样调用size方法：
+
+```scala
+scala> contents.size()
+res0: Int = 3
+```
+
+由于通配符没有名称，没有办法在两个不同的地方使用它。假如想要创建一个可变的Scala集合，并使用contents的元素初始化：
+
+```scala
+import scala.collection.mutable
+val iter = (new Wild).contents.iterator
+val set = mutable.Set.empty[???] //应该填什么类型？
+while(iter.hashMore)
+  set += iter.next()
+```
+
+第三行中，没有办法给出Java集合中元素类型的名称，因此无法写下set的满足各项要求的类型，为了绕开这个问题，考虑一下两种技巧：
+
+1. 将通配类型传入方法时，给方法分配一个类型参数来表示这个通配类型。现在就有了一个该类型的名称，想用多少次都可以。
+2. 不要从方法返回通配类型，而是返回一个对每个占位符类型都定义了抽象成员的对象。
+
+```scala
+import scala.collection.mutable
+import java.util.Collection
+
+abstract class SetAndType{
+  type Elem
+  val set: mutable.Set[Elem]
+}
+
+def javaSet2ScalaSet[T](jset: Collection[T]): SetAndType = {
+  val sset = mutable.Set.empty[T] //现在可以使红T来表示这个类型
+  val iter = jset.iterator
+  while(iter.hasNext)
+    sset += iter.next()
+  
+  return new SetAntType{
+    type Elem = T
+    val set = sset
+  }
+}
+```
+
+这就是Scala通常不使用通配类型。为了用他们实现任何复杂一点的东西，就会倾向于将他们转换成使用抽象成员，既然如此，一开始就使用抽象成员也完全可以。
+
+### 31.4 同时编译Scala和Java
+
+当编译依赖Java的Scala代码是，首先将Java代码构建成类文件，然后再编译Scala代码，将Java代码的文件放在类路径中，不过反过来，Java无法调用Scala的代码。
+
+为了支持这种构件场景，`Scala允许同时面对Java代码和Java类文件做编译。你需要做的就是将Java代码放在命令行中，就当做它们是Scala文件那样`。**Scala不会编译这些文件，但是会扫描它们，看看包含了什么内容**。要利用这一点，首先用Java源文件编译Scala代码，然后再利用Scala编译出的类文件编译Java代码，下面是典型的命令执行顺序：
+
+```bash
+$ scalac -d bin InventoryAnalysis.scala InventoryItem.java Inventory.java
+$ javac -cp bin -d bin Inventory.java InventoryItem.java InventoryManagement.java
+$ scala -cp bin InventoryManagement
+Most expensive item = sprocket($4.99)
+```
+
+### 31.5 基于Scala 2.12特性的Java8集成
+
+Java8对Java语言和字节码做了一些改进，从Scala 2.12版本开始用到了这些改进，利用Java8的这些新特性，Scala 2.12的编译器可以生成更小的类文件和jar文件，同时改善了特质的二进制兼容性。
+
+#### 31.5.1 Lambda表达式和SAM类型
+
+有了lambda表达式，可以改进匿名类的定义，以前定义可能像这样：
+
+```java
+JButton button = new JButton();
+button.addActionListener(
+  new ActionListener(){
+    public void actionPerformed(ActionEvent event){
+      System.out.println("pressed!");
+    }
+  }
+);
+```
+
+使用lambda表达式改进ActionListener接口的实现：
+
+```java
+JButton button = new JButton();
+button.addActionListener(
+  event -> System.out.println("pressed!")
+);
+```
+
+在Scala中，相同的情形下使用匿名内部类的实例，不过可能更倾向于使用函数字面量，就像这样：
+
+```scala
+val button = new JButton
+button.addActionListener(
+  _ => println("pressed!")
+)
+```
+
+可以通过定义一个从`ActionEvent => Unit`函数类型到ActionListener的隐式转换来支持这样的编码风格。
+
+Scala 2.12允许我们在这样的情况下直接使用函数字面量，而不需要定义隐式转换。跟Java8一样，Scala 2.12也允许任何要求某个声明了单个抽象方法(SAM)的类或特质的实例的地方使用函数类型的值。在Scala 2.12中，任何SAM都可以，比如，可以定义一个Increaser特质，这个特质带有唯一的一个抽象方法increase：
+
+```scala
+trait Increaser{
+  def increase(i: Int): Int
+}
+```
+
+然后可定义一个接收Increaser的方法：
+
+```scala
+def increaseOne(increaser: Increaser): Int =
+  increaser.increase(1)
+```
+
+为了调用新的方法，可以传入一个Increaser特质的匿名实例，就像这样：
+
+```scala
+increaseOne(
+  new Increaser{
+    def increase(i: Int): Int = i + 7
+  }
+)
+```
+
+不过在Scala 2.12中，可以简单使用一个函数字面量，因为Increaser是一个SAM类型：
+
+```scala
+increaseOne(i => i + 7)
+```
+
+#### 31.5.2 从Scala 2.12使用Java 8的Stream
+
+Java的Stream是一个函数式的数据结构，提供了接收java.util.function.IntUnaryOperator参数的map方法。可以从Scala调用Stream.map来对Array的每个元素加1：
+
+```scala
+scala> import java.util.function.IntUnaryOperator
+import java.util.function.IntUnaryOperator
+
+scala> import java.util.Array
+ArrayDeque   ArrayList   Arrays
+
+scala> import java.util.Arrays
+import java.util.Arrays
+
+scala> val stream = Arrays.stream(Array(1, 2, 3))
+stream: java.util.stream.IntStream = java.util.stream.IntPipeline$Head@7cf8f45a
+
+scala> stream.map(
+     | new IntUnaryOperator{
+     | def applyAsInt(i: Int): Int = i + 1
+     | }
+     | ).toArray
+res0: Array[Int] = Array(2, 3, 4)
+```
+
+不过由于IntUnaryOperator是一个SAM类型，可以使用函数字面量来更加精简地调用它：
+
+```scala
+scala> val stream = Arrays.stream(Array(1, 2 ,3))
+stream: java.util.stream.IntStream = java.util.stream.IntPipeline$Head@54c697c
+
+scala> stream.map(i => i +1).toArray
+res3: Array[Int] = Array(2, 3, 4)
+```
+
+注意，只有函数字面量会被适配成SAM类型，并非任意的拥有函数类型的表达式，如果定义下面一个表达式：
+
+```scala
+scala> val f = (i: Int) => i + 1
+f: Int => Int = $$Lambda$1318/221029289@2b26d289
+```
+
+尽管f跟之前传入stream.map的函数字面量有着相同的类型，并不能在要求IntUnaryOperator的地方使用f:
+
+```scala
+scala> val stream = Arrays.stream(Array(1, 2, 3))
+stream: java.util.stream.IntStream = java.util.stream.IntPipeline$Head@76afb9d
+
+scala> stream.map(f).toArray
+<console>:16: error: type mismatch;
+ found   : Int => Int
+ required: java.util.function.IntUnaryOperator
+       stream.map(f).toArray
+                  ^
+```
+
+要使用f，可以显式地用函数字面量来调用它，就像这样：
+
+```scala
+scala> stream.map(i => f(i)).toArray
+res5: Array[Int] = Array(2, 3, 4)
+```
+
+或者在定义f的时候，将f标注为IntUnaryOperator，即stream.map预期的类型：
+
+```scala
+scala> val f: IntUnaryOperator = i => i + 1
+f: java.util.function.IntUnaryOperator = $$Lambda$1339/319357437@659f5f32
+
+scala> val stream = Arrays.stream(Array(1, 2, 3))
+stream: java.util.stream.IntStream = java.util.stream.IntPipeline$Head@70b2819f
+
+scala> stream.map(f).toArray
+res6: Array[Int] = Array(2, 3, 4)
+```
+
+有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
