@@ -12362,7 +12362,7 @@ override def hashCode: Int = (super.hashCode, numer, denom).##
 ```scala
 class Rational(n: Int, d: Int){
   require(d != 0)
-    
+  
   private val g = gcd(n.abs, d.abs)
   val numer = (if (d < 0) -n else n) / g
   val denom = d.abs / g
