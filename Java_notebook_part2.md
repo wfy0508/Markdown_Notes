@@ -1,5 +1,2261 @@
 # Java笔记
 
+## 9 IO
+
+IO是指Input/Output，即输入和输出。以内存为中心：
+
+- Input指从外部读入数据到内存，例如，把文件从磁盘读取到内存，从网络读取数据到内存等等。
+- Output指把数据从内存输出到外部，例如，把数据从内存写入到文件，把数据从内存输出到网络等等。
+
+为什么要把数据读到内存才能处理这些数据？因为代码是在内存中运行的，数据也必须读到内存，最终的表示方式无非是byte数组，字符串等，都必须存放在内存里。
+
+从Java代码来看，输入实际上就是从外部，例如，硬盘上的某个文件，把内容读到内存，并且以Java提供的某种数据类型表示，例如，`byte[]`，`String`，这样，后续代码才能处理这些数据。
+
+因为内存有“易失性”的特点，所以必须把处理后的数据以某种方式输出，例如，写入到文件。Output实际上就是把Java表示的数据格式，例如，`byte[]`，`String`等输出到某个地方。
+
+IO流是一种顺序读写数据的模式，它的特点是单向流动。数据类似自来水一样在水管中流动，所以我们把它称为IO流。
+
+**InputStream / OutputStream**
+
+IO流以`byte`（字节）为最小单位，因此也称为*字节流*。例如，我们要从磁盘读入一个文件，包含6个字符，就相当于读入了6个字节的数据：
+
+```ascii
+╔════════════╗
+║   Memory   ║
+╚════════════╝
+       ▲
+       │0x48
+       │0x65
+       │0x6c
+       │0x6c
+       │0x6f
+       │0x21
+ ╔═══════════╗
+ ║ Hard Disk ║
+ ╚═══════════╝
+```
+
+这6个字节是按顺序读入的，所以是输入字节流。
+
+反过来，我们把6个字节从内存写入磁盘文件，就是输出字节流：
+
+```ascii
+╔════════════╗
+║   Memory   ║
+╚════════════╝
+       │0x21
+       │0x6f
+       │0x6c
+       │0x6c
+       │0x65
+       │0x48
+       ▼
+ ╔═══════════╗
+ ║ Hard Disk ║
+ ╚═══════════╝
+```
+
+在Java中，`InputStream`代表输入字节流，`OuputStream`代表输出字节流，这是最基本的两种IO流。
+
+**Reader / Writer**
+
+如果我们需要读写的是字符，并且字符不全是单字节表示的ASCII字符，那么，按照`char`来读写显然更方便，这种流称为***字符流***。
+
+Java提供了`Reader`和`Writer`表示字符流，字符流传输的最小数据单位是`char`。
+
+例如，我们把`char[]`数组`Hi你好`这4个字符用`Writer`字符流写入文件，并且使用UTF-8编码，得到的最终文件内容是8个字节，英文字符`H`和`i`各占一个字节，中文字符`你好`各占3个字节：
+
+```ascii
+0x48
+0x69
+0xe4bda0
+0xe5a5bd
+```
+
+反过来，我们用`Reader`读取以UTF-8编码的这8个字节，会从`Reader`中得到`Hi你好`这4个字符。
+
+因此，**`Reader`和`Writer`本质上是一个能自动编解码的`InputStream`和`OutputStream`**。
+
+使用`Reader`，数据源虽然是字节，但我们读入的数据都是`char`类型的字符，原因是`Reader`内部把读入的`byte`做了编码，转换成了`char`。使用`InputStream`，我们读入的数据和原始二进制数据一模一样，是`byte[]`数组，但是我们可以自己把二进制`byte[]`数组按照某种编码转换为字符串。究竟使用`Reader`还是`InputStream`，要取决于具体的使用场景。如果数据源不是文本，就只能使用`InputStream`，如果数据源是文本，使用Reader更方便一些。`Writer`和`OutputStream`是类似的。
+
+**同步和异步**
+
+同步IO是指，读写IO时代码必须等待数据返回后才继续执行后续代码，它的优点是代码编写简单，缺点是CPU执行效率低。
+
+而异步IO是指，读写IO时仅发出请求，然后立刻执行后续代码，它的优点是CPU执行效率高，缺点是代码编写复杂。
+
+Java标准库的包`java.io`提供了同步IO，而`java.nio`则是异步IO。上面我们讨论的`InputStream`、`OutputStream`、`Reader`和`Writer`都是同步IO的抽象类，对应的具体实现类，以文件为例，有`FileInputStream`、`FileOutputStream`、`FileReader`和`FileWriter`。
+
+本节我们只讨论Java的同步IO，即输入/输出流的IO模型。
+
+**小结**
+
+IO流是一种流式的数据输入/输出模型：
+
+- 二进制数据以`byte`为最小单位在`InputStream`/`OutputStream`中单向流动；
+- 字符数据以`char`为最小单位在`Reader`/`Writer`中单向流动。
+
+Java标准库的`java.io`包提供了同步IO功能：
+
+- 字节流接口：`InputStream`/`OutputStream`；
+- 字符流接口：`Reader`/`Writer`。
+
+### 9.1 File对象
+
+在计算机系统中，文件是非常重要的存储方式。Java的标准库`java.io`提供了`File`对象来操作文件和目录。
+
+要构造一个`File`对象，需要传入文件路径：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) {
+        File f = new File("C:\\Windows\\notepad.exe");
+        System.out.println(f);
+    }
+}
+
+```
+
+构造File对象时，既可以传入绝对路径，也可以传入相对路径。绝对路径是以根目录开头的完整路径，例如：
+
+```java
+File f = new File("C:\\Windows\\notepad.exe");
+```
+
+注意Windows平台使用`\`作为路径分隔符，在Java字符串中需要用`\\`表示一个`\`。Linux平台使用`/`作为路径分隔符：
+
+```java
+File f = new File("/usr/bin/javac");
+```
+
+传入相对路径时，相对路径前面加上当前目录就是绝对路径：
+
+```java
+// 假设当前目录是C:\Docs
+File f1 = new File("sub\\javac"); // 绝对路径是C:\Docs\sub\javac
+File f3 = new File(".\\sub\\javac"); // 绝对路径是C:\Docs\sub\javac
+File f3 = new File("..\\sub\\javac"); // 绝对路径是C:\sub\javac
+```
+
+可以用`.`表示当前目录，`..`表示上级目录。
+
+File对象有3种形式表示的路径，一种是`getPath()`，返回构造方法传入的路径，一种是`getAbsolutePath()`，返回绝对路径，一种是`getCanonicalPath`，它和绝对路径类似，但是返回的是规范路径。
+
+什么是规范路径？我们看以下代码：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        File f = new File("..");
+        System.out.println(f.getPath());
+        System.out.println(f.getAbsolutePath());
+        System.out.println(f.getCanonicalPath());
+    }
+}
+```
+
+绝对路径可以表示成`C:\Windows\System32\..\notepad.exe`，而规范路径就是把`.`和`..`转换成标准的绝对路径后的路径：`C:\Windows\notepad.exe`。
+
+因为Windows和Linux的路径分隔符不同，File对象有一个静态变量用于表示当前平台的系统分隔符：
+
+```java
+System.out.println(File.separator); // 根据当前平台打印"\"或"/"
+```
+
+#### 9.1.1 文件和目录
+
+`File`对象既可以表示文件，也可以表示目录。特别要注意的是，构造一个`File`对象，即使传入的文件或目录不存在，代码也不会出错，因为构造一个`File`对象，并不会导致任何磁盘操作。只有当我们调用`File`对象的某些方法的时候，才真正进行磁盘操作。
+
+例如，调用`isFile()`，判断该`File`对象是否是一个已存在的文件，调用`isDirectory()`，判断该`File`对象是否是一个已存在的目录：
+
+```java
+public class Main {
+    public static void main(String[] args) throws IOException {
+        File f1 = new File("C:\\Windows");
+        File f2 = new File("C:\\Windows\\notepad.exe");
+        File f3 = new File("C:\\Windows\\nothing");
+        System.out.println(f1.isFile());
+        System.out.println(f1.isDirectory());
+        System.out.println(f2.isFile());
+        System.out.println(f2.isDirectory());
+        System.out.println(f3.isFile());
+        System.out.println(f3.isDirectory());
+    }
+}
+```
+
+用`File`对象获取到一个文件时，还可以进一步判断文件的权限和大小：
+
+- `boolean canRead()`：是否可读；
+- `boolean canWrite()`：是否可写；
+- `boolean canExecute()`：是否可执行；
+- `long length()`：文件字节大小。
+
+对目录而言，是否可执行表示能否列出它包含的文件和子目录。
+
+#### 9.1.2 创建和删除文件
+
+当File对象表示一个文件时，可以通过`createNewFile()`创建一个新文件，用`delete()`删除该文件：
+
+```java
+File file = new File("/path/to/file");
+if (file.createNewFile()) {
+    // 文件创建成功:
+    // TODO:
+    if (file.delete()) {
+        // 删除文件成功:
+    }
+}
+```
+
+有些时候，程序需要读写一些临时文件，File对象提供了`createTempFile()`来创建一个临时文件，以及`deleteOnExit()`在JVM退出时自动删除该文件。
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        File f = File.createTempFile("tmp-", ".txt"); // 提供临时文件的前缀和后缀
+        f.deleteOnExit(); // JVM退出时自动删除
+        System.out.println(f.isFile());
+        System.out.println(f.getAbsolutePath());
+    }
+}
+
+```
+
+#### 9.1.3 遍历文件和目录
+
+当File对象表示一个目录时，可以使用`list()`和`listFiles()`列出目录下的文件和子目录名。`listFiles()`提供了一系列重载方法，可以过滤不想要的文件和目录：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        File f = new File("C:\\Windows");
+        File[] fs1 = f.listFiles(); // 列出所有文件和子目录
+        printFiles(fs1);
+        File[] fs2 = f.listFiles(new FilenameFilter() { // 仅列出.exe文件
+            public boolean accept(File dir, String name) {
+                return name.endsWith(".exe"); // 返回true表示接受该文件
+            }
+        });
+        printFiles(fs2);
+    }
+
+    static void printFiles(File[] files) {
+        System.out.println("==========");
+        if (files != null) {
+            for (File f : files) {
+                System.out.println(f);
+            }
+        }
+        System.out.println("==========");
+    }
+}
+```
+
+和文件操作类似，File对象如果表示一个目录，可以通过以下方法创建和删除目录：
+
+- `boolean mkdir()`：创建当前File对象表示的目录；
+- `boolean mkdirs()`：创建当前File对象表示的目录，并在必要时将不存在的父目录也创建出来；
+- `boolean delete()`：删除当前File对象表示的目录，当前目录必须为空才能删除成功。
+
+#### 9.1.4 Path
+
+Java标准库还提供了一个`Path`对象，它位于`java.nio.file`包。`Path`对象和`File`对象类似，但操作更加简单：
+
+```java
+import java.io.*;
+import java.nio.file.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        Path p1 = Paths.get(".", "project", "study"); // 构造一个Path对象
+        System.out.println(p1);
+        Path p2 = p1.toAbsolutePath(); // 转换为绝对路径
+        System.out.println(p2);
+        Path p3 = p2.normalize(); // 转换为规范路径
+        System.out.println(p3);
+        File f = p3.toFile(); // 转换为File对象
+        System.out.println(f);
+        for (Path p : Paths.get("..").toAbsolutePath()) { // 可以直接遍历Path
+            System.out.println("  " + p);
+        }
+    }
+}
+```
+
+如果需要对目录进行复杂的拼接、遍历等操作，使用`Path`对象更方便。
+
+#### 9.1.5 小结
+
+Java标准库的`java.io.File`对象表示一个文件或者目录：
+
+- 创建`File`对象本身不涉及IO操作；
+- 可以获取路径／绝对路径／规范路径：`getPath()`/`getAbsolutePath()`/`getCanonicalPath()`；
+- 可以获取目录的文件和子目录：`list()`/`listFiles()`；
+- 可以创建或删除文件和目录。
+
+### 9.2 InputStream
+
+`InputStream`就是Java标准库提供的最基本的输入流。它位于`java.io`这个包里。`java.io`包提供了所有同步IO的功能。
+
+要特别注意的一点是，`InputStream`并不是一个接口，而是一个抽象类，它是所有输入流的超类。这个抽象类定义的一个最重要的方法就是`int read()`，签名如下：
+
+```java
+public abstract int read() throws IOException;
+```
+
+这个方法会读取输入流的下一个字节，并返回字节表示的`int`值（0~255）。如果已读到末尾，返回`-1`表示不能继续读取了。
+
+`FileInputStream`是`InputStream`的一个子类。顾名思义，`FileInputStream`就是从文件流中读取数据。下面的代码演示了如何完整地读取一个`FileInputStream`的所有字节：
+
+```java
+public void readFile() throws IOException {
+    // 创建一个FileInputStream对象:
+    InputStream input = new FileInputStream("src/readme.txt");
+    for (;;) {
+        int n = input.read(); // 反复调用read()方法，直到返回-1
+        if (n == -1) {
+            break;
+        }
+        System.out.println(n); // 打印byte的值
+    }
+    input.close(); // 关闭流
+}
+```
+
+在计算机中，类似文件、网络端口这些资源，都是由操作系统统一管理的。应用程序在运行的过程中，如果打开了一个文件进行读写，完成后要及时地关闭，以便让操作系统把资源释放掉，否则，应用程序占用的资源会越来越多，不但白白占用内存，还会影响其他应用程序的运行。`InputStream`和`OutputStream`都是通过`close()`方法来关闭流。关闭流就会释放对应的底层资源。我们还要注意到在读取或写入IO流的过程中，可能会发生错误，例如，文件不存在导致无法读取，没有写权限导致写入失败，等等，这些底层错误由Java虚拟机自动封装成`IOException`异常并抛出。因此，所有与IO操作相关的代码都必须正确处理`IOException`。仔细观察上面的代码，会发现一个潜在的问题：如果读取过程中发生了IO错误，`InputStream`就没法正确地关闭，资源也就没法及时释放。因此，我们需要用`try ... finally`来保证`InputStream`在无论是否发生IO错误的时候都能够正确地关闭：
+
+```java
+public void readFile() throws IOException {
+    InputStream input = null;
+    try {
+        input = new FileInputStream("src/readme.txt");
+        int n;
+        while ((n = input.read()) != -1) { // 利用while同时读取并判断
+            System.out.println(n);
+        }
+    } finally {
+        if (input != null) { input.close(); }
+    }
+}
+```
+
+用`try ... finally`来编写上述代码会感觉比较复杂，更好的写法是利用Java 7引入的新的`try(resource)`的语法，只需要编写`try`语句，让编译器自动为我们关闭资源。推荐的写法如下：
+
+```java
+public void readFile() throws IOException {
+    try (InputStream input = new FileInputStream("src/readme.txt")) {
+        int n;
+        while ((n = input.read()) != -1) {
+            System.out.println(n);
+        }
+    } // 编译器在此自动为我们写入finally并调用close()
+}
+```
+
+实际上，编译器并不会特别地为`InputStream`加上自动关闭。编译器只看`try(resource = ...)`中的对象是否实现了`java.lang.AutoCloseable`接口，如果实现了，就自动加上`finally`语句并调用`close()`方法。`InputStream`和`OutputStream`都实现了这个接口，因此，都可以用在`try(resource)`中。
+
+#### 9.2.1 缓冲
+
+在读取流的时候，一次读取一个字节并不是最高效的方法。很多流支持一次性读取多个字节到缓冲区，对于文件和网络流来说，利用缓冲区一次性读取多个字节效率往往要高很多。`InputStream`提供了两个重载方法来支持读取多个字节：
+
+- `int read(byte[] b)`：读取若干字节并填充到`byte[]`数组，返回读取的字节数
+- `int read(byte[] b, int off, int len)`：指定`byte[]`数组的偏移量和最大填充数
+
+利用上述方法一次读取多个字节时，需要先定义一个`byte[]`数组作为缓冲区，`read()`方法会尽可能多地读取字节到缓冲区， 但不会超过缓冲区的大小。`read()`方法的返回值不再是字节的`int`值，而是返回实际读取了多少个字节。如果返回`-1`，表示没有更多的数据了。
+
+利用缓冲区一次读取多个字节的代码如下：
+
+```java
+public void readFile() throws IOException {
+    try (InputStream input = new FileInputStream("src/readme.txt")) {
+        // 定义1000个字节大小的缓冲区:
+        byte[] buffer = new byte[1000];
+        int n;
+        while ((n = input.read(buffer)) != -1) { // 读取到缓冲区
+            System.out.println("read " + n + " bytes.");
+        }
+    }
+}
+```
+
+#### 9.2.2 阻塞
+
+在调用`InputStream`的`read()`方法读取数据时，我们说`read()`方法是阻塞（Blocking）的。它的意思是，对于下面的代码：
+
+```java
+int n;
+n = input.read(); // 必须等待read()方法返回才能执行下一行代码
+int m = n;
+```
+
+执行到第二行代码时，必须等`read()`方法返回后才能继续。因为读取IO流相比执行普通代码，速度会慢很多，因此，无法确定`read()`方法调用到底要花费多长时间。
+
+#### 9.2.3 InputStream实现类
+
+用`FileInputStream`可以从文件获取输入流，这是`InputStream`常用的一个实现类。此外，`ByteArrayInputStream`可以在内存中模拟一个`InputStream`：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        byte[] data = { 72, 101, 108, 108, 111, 33 };
+        try (InputStream input = new ByteArrayInputStream(data)) {
+            int n;
+            while ((n = input.read()) != -1) {
+                System.out.println((char)n);
+            }
+        }
+    }
+}
+```
+
+`ByteArrayInputStream`实际上是把一个`byte[]`数组在内存中变成一个`InputStream`，虽然实际应用不多，但测试的时候，可以用它来构造一个`InputStream`。
+
+举个栗子：我们想从文件中读取所有字节，并转换成`char`然后拼成一个字符串，可以这么写：
+
+```java
+public class Main {
+    public static void main(String[] args) throws IOException {
+        String s;
+        try (InputStream input = new FileInputStream("C:\\test\\README.txt")) {
+            int n;
+            StringBuilder sb = new StringBuilder();
+            while ((n = input.read()) != -1) {
+                sb.append((char) n);
+            }
+            s = sb.toString();
+        }
+        System.out.println(s);
+    }
+}
+```
+
+要测试上面的程序，就真的需要在本地硬盘上放一个真实的文本文件。如果我们把代码稍微改造一下，提取一个`readAsString()`的方法：
+
+```java
+public class Main {
+    public static void main(String[] args) throws IOException {
+        String s;
+        try (InputStream input = new FileInputStream("C:\\test\\README.txt")) {
+            s = readAsString(input);
+        }
+        System.out.println(s);
+    }
+
+    public static String readAsString(InputStream input) throws IOException {
+        int n;
+        StringBuilder sb = new StringBuilder();
+        while ((n = input.read()) != -1) {
+            sb.append((char) n);
+        }
+        return sb.toString();
+    }
+}
+```
+
+对这个`String readAsString(InputStream input)`方法进行测试就相当简单，因为不一定要传入一个真的`FileInputStream`：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        byte[] data = { 72, 101, 108, 108, 111, 33 };
+        try (InputStream input = new ByteArrayInputStream(data)) {
+            String s = readAsString(input);
+            System.out.println(s);
+        }
+    }
+
+    public static String readAsString(InputStream input) throws IOException {
+        int n;
+        StringBuilder sb = new StringBuilder();
+        while ((n = input.read()) != -1) {
+            sb.append((char) n);
+        }
+        return sb.toString();
+    }
+}
+```
+
+这就是面向抽象编程原则的应用：接受`InputStream`抽象类型，而不是具体的`FileInputStream`类型，从而使得代码可以处理`InputStream`的任意实现类。
+
+#### 9.2.4 小结
+
+Java标准库的`java.io.InputStream`定义了所有输入流的超类：
+
+- `FileInputStream`实现了文件流输入；
+- `ByteArrayInputStream`在内存中模拟一个字节流输入。
+
+总是使用`try(resource)`来保证`InputStream`正确关闭。
+
+### 9.3 OutputStream
+
+和`InputStream`相反，`OutputStream`是Java标准库提供的最基本的输出流。
+
+和`InputStream`类似，`OutputStream`也是抽象类，它是所有输出流的超类。这个抽象类定义的一个最重要的方法就是`void write(int b)`，签名如下：
+
+```java
+public abstract void write(int b) throws IOException;
+```
+
+这个方法会写入一个字节到输出流。要注意的是，虽然传入的是`int`参数，但只会写入一个字节，即只写入`int`最低8位表示字节的部分（相当于`b & 0xff`）。
+
+和`InputStream`类似，`OutputStream`也提供了`close()`方法关闭输出流，以便释放系统资源。要特别注意：`OutputStream`还提供了一个`flush()`方法，它的目的是将缓冲区的内容真正输出到目的地。
+
+为什么要有`flush()`？因为向磁盘、网络写入数据的时候，出于效率的考虑，操作系统并不是输出一个字节就立刻写入到文件或者发送到网络，而是把输出的字节先放到内存的一个缓冲区里（本质上就是一个`byte[]`数组），等到缓冲区写满了，再一次性写入文件或者网络。对于很多IO设备来说，一次写一个字节和一次写1000个字节，花费的时间几乎是完全一样的，所以`OutputStream`有个`flush()`方法，能强制把缓冲区内容输出。
+
+通常情况下，我们不需要调用这个`flush()`方法，因为缓冲区写满了`OutputStream`会自动调用它，并且，在调用`close()`方法关闭`OutputStream`之前，也会自动调用`flush()`方法。
+
+但是，在某些情况下，我们必须手动调用`flush()`方法。举个栗子：
+
+小明正在开发一款在线聊天软件，当用户输入一句话后，就通过`OutputStream`的`write()`方法写入网络流。小明测试的时候发现，发送方输入后，接收方根本收不到任何信息，怎么肥四？
+
+原因就在于写入网络流是先写入内存缓冲区，等缓冲区满了才会一次性发送到网络。如果缓冲区大小是4K，则发送方要敲几千个字符后，操作系统才会把缓冲区的内容发送出去，这个时候，接收方会一次性收到大量消息。
+
+解决办法就是每输入一句话后，立刻调用`flush()`，不管当前缓冲区是否已满，强迫操作系统把缓冲区的内容立刻发送出去。
+
+实际上，`InputStream`也有缓冲区。例如，从`FileInputStream`读取一个字节时，操作系统往往会一次性读取若干字节到缓冲区，并维护一个指针指向未读的缓冲区。然后，每次我们调用`int read()`读取下一个字节时，可以直接返回缓冲区的下一个字节，避免每次读一个字节都导致IO操作。当缓冲区全部读完后继续调用`read()`，则会触发操作系统的下一次读取并再次填满缓冲区。
+
+#### 9.3.1 FileOutputStream
+
+我们以`FileOutputStream`为例，演示如何将若干个字节写入文件流：
+
+```java
+public void writeFile() throws IOException {
+    OutputStream output = new FileOutputStream("out/readme.txt");
+    output.write(72); // H
+    output.write(101); // e
+    output.write(108); // l
+    output.write(108); // l
+    output.write(111); // o
+    output.close();
+}
+```
+
+每次写入一个字节非常麻烦，更常见的方法是一次性写入若干字节。这时，可以用`OutputStream`提供的重载方法`void write(byte[])`来实现：
+
+```java
+public void writeFile() throws IOException {
+    OutputStream output = new FileOutputStream("out/readme.txt");
+    output.write("Hello".getBytes("UTF-8")); // Hello
+    output.close();
+}
+```
+
+和`InputStream`一样，上述代码没有考虑到在发生异常的情况下如何正确地关闭资源。写入过程也会经常发生IO错误，例如，磁盘已满，无权限写入等等。我们需要用`try(resource)`来保证`OutputStream`在无论是否发生IO错误的时候都能够正确地关闭：
+
+```java
+public void writeFile() throws IOException {
+    try (OutputStream output = new FileOutputStream("out/readme.txt")) {
+        output.write("Hello".getBytes("UTF-8")); // Hello
+    } // 编译器在此自动为我们写入finally并调用close()
+}
+```
+
+#### 9.3.2 阻塞
+
+和`InputStream`一样，`OutputStream`的`write()`方法也是阻塞的。
+
+#### 9.3.3 OutputStream实现类
+
+用`FileOutputStream`可以从文件获取输出流，这是`OutputStream`常用的一个实现类。此外，`ByteArrayOutputStream`可以在内存中模拟一个`OutputStream`：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        byte[] data;
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            output.write("Hello ".getBytes("UTF-8"));
+            output.write("world!".getBytes("UTF-8"));
+            data = output.toByteArray();
+        }
+        System.out.println(new String(data, "UTF-8"));
+    }
+}
+```
+
+`ByteArrayOutputStream`实际上是把一个`byte[]`数组在内存中变成一个`OutputStream`，虽然实际应用不多，但测试的时候，可以用它来构造一个`OutputStream`。
+
+#### 9.3.4 小结
+
+Java标准库的`java.io.OutputStream`定义了所有输出流的超类：
+
+- `FileOutputStream`实现了文件流输出；
+- `ByteArrayOutputStream`在内存中模拟一个字节流输出。
+
+某些情况下需要手动调用`OutputStream`的`flush()`方法来强制输出缓冲区。
+
+总是使用`try(resource)`来保证`OutputStream`正确关闭。
+
+### 9.4 Filter模式
+
+Java的IO标准库提供的`InputStream`根据来源可以包括：
+
+- `FileInputStream`：从文件读取数据，是最终数据源；
+- `ServletInputStream`：从HTTP请求读取数据，是最终数据源；
+- `Socket.getInputStream()`：从TCP连接读取数据，是最终数据源；
+- ...
+
+如果我们要给`FileInputStream`添加缓冲功能，则可以从`FileInputStream`派生一个类：
+
+```java
+BufferedFileInputStream extends FileInputStream
+```
+
+如果要给`FileInputStream`添加计算签名的功能，类似的，也可以从`FileInputStream`派生一个类：
+
+```java
+DigestFileInputStream extends FileInputStream
+```
+
+如果要给`FileInputStream`添加加密/解密功能，还是可以从`FileInputStream`派生一个类：
+
+```java
+CipherFileInputStream extends FileInputStream
+```
+
+如果要给`FileInputStream`添加缓冲和签名的功能，那么我们还需要派生`BufferedDigestFileInputStream`。如果要给`FileInputStream`添加缓冲和加解密的功能，则需要派生`BufferedCipherFileInputStream`。
+
+我们发现，给`FileInputStream`添加3种功能，至少需要3个子类。这3种功能的组合，又需要更多的子类：
+
+```ascii
+                             ┌────────────────┐
+                             │FileInputStream │
+                             └────────────────┘
+                                     ▲
+             ┌──────────-─┬──────────┼─────────┬─────────────┐
+             │            │          │         │             │
+┌─────────────────────────┐│┌───────────────────┐│┌─────────────────────┐
+│BufferedFileInputStream  │││ DigestInputStream │││CipherFileInputStream│
+└─────────────────────────┘│└───────────────────┘│└─────────────────────┘
+                           │                     │
+    ┌────────────────────────────────┐ ┌───────────────────────────────────┐
+    │ BufferedDigestFileInputStream  │ │   BufferedCipherFileInputStream   │
+    └────────────────────────────────┘ └───────────────────────────────────┘
+```
+
+这还只是针对`FileInputStream`设计，如果针对另一种`InputStream`设计，很快会出现子类爆炸的情况。
+
+因此，直接使用继承，为各种`InputStream`附加更多的功能，根本无法控制代码的复杂度，很快就会失控。
+
+为了解决依赖继承会导致子类数量失控的问题，JDK首先将`InputStream`分为两大类：
+
+**一类是直接提供数据的基础`InputStream`**，例如：
+
+- FileInputStream
+- ByteArrayInputStream
+- ServletInputStream
+- ...
+
+**一类是提供额外附加功能的`InputStream`**，例如：
+
+- BufferedInputStream
+- DigestInputStream
+- CipherInputStream
+- ...
+
+当我们需要给一个“基础”`InputStream`附加各种功能时，我们先确定这个能提供数据源的`InputStream`，因为我们需要的数据总得来自某个地方，例如，`FileInputStream`，数据来源自文件：
+
+```java
+InputStream file = new FileInputStream("test.gz");
+```
+
+紧接着，我们希望`FileInputStream`能提供缓冲的功能来提高读取的效率，因此我们用`BufferedInputStream`包装这个`InputStream`，得到的包装类型是`BufferedInputStream`，但它仍然被视为一个`InputStream`：
+
+```java
+InputStream buffered = new BufferedInputStream(file);
+```
+
+最后，假设该文件已经用gzip压缩了，我们希望直接读取解压缩的内容，就可以再包装一个`GZIPInputStream`：
+
+```java
+InputStream gzip = new GZIPInputStream(buffered);
+```
+
+无论我们包装多少次，得到的对象始终是`InputStream`，我们直接用`InputStream`来引用它，就可以正常读取：
+
+```ascii
+┌─────────────────────────┐
+│GZIPInputStream          │
+│┌───────────────────────┐│
+││BufferedFileInputStream││
+││┌─────────────────────┐││
+│││   FileInputStream   │││
+││└─────────────────────┘││
+│└───────────────────────┘│
+└─────────────────────────┘
+```
+
+上述这种**通过一个“基础”组件再叠加各种“附加”功能组件的模式，称之为Filter模式**（或者装饰器模式：Decorator）。它可以让我们通过少量的类来实现各种功能的组合：
+
+```ascii
+                 ┌─────────────┐
+                 │ InputStream │
+                 └─────────────┘
+                       ▲ ▲
+┌────────────────────┐ │ │ ┌─────────────────┐
+│  FileInputStream   │─┤ └─│FilterInputStream│
+└────────────────────┘ │   └─────────────────┘
+┌────────────────────┐ │     ▲ ┌───────────────────┐
+│ByteArrayInputStream│─┤     ├─│BufferedInputStream│
+└────────────────────┘ │     │ └───────────────────┘
+┌────────────────────┐ │     │ ┌───────────────────┐
+│ ServletInputStream │─┘     ├─│  DataInputStream  │
+└────────────────────┘       │ └───────────────────┘
+                             │ ┌───────────────────┐
+                             └─│CheckedInputStream │
+                               └───────────────────┘
+```
+
+类似的，`OutputStream`也是以这种模式来提供各种功能：
+
+```ascii
+                  ┌─────────────┐
+                  │OutputStream │
+                  └─────────────┘
+                        ▲ ▲
+┌─────────────────────┐ │ │ ┌──────────────────┐
+│  FileOutputStream   │─┤ └─│FilterOutputStream│
+└─────────────────────┘ │   └──────────────────┘
+┌─────────────────────┐ │     ▲ ┌────────────────────┐
+│ByteArrayOutputStream│─┤     ├─│BufferedOutputStream│
+└─────────────────────┘ │     │ └────────────────────┘
+┌─────────────────────┐ │     │ ┌────────────────────┐
+│ ServletOutputStream │─┘     ├─│  DataOutputStream  │
+└─────────────────────┘       │ └────────────────────┘
+                              │ ┌────────────────────┐
+                              └─│CheckedOutputStream │
+                                └────────────────────┘
+```
+
+#### 9.4.1 编写FilterInputStream
+
+我们也可以自己编写`FilterInputStream`，以便可以把自己的`FilterInputStream`“叠加”到任何一个`InputStream`中。
+
+下面的例子演示了如何编写一个`CountInputStream`，它的作用是对输入的字节进行计数：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        byte[] data = "hello, world!".getBytes("UTF-8");
+        try (CountInputStream input = new CountInputStream(new ByteArrayInputStream(data))) {
+            int n;
+            while ((n = input.read()) != -1) {
+                System.out.println((char)n);
+            }
+            System.out.println("Total read " + input.getBytesRead() + " bytes");
+        }
+    }
+}
+
+class CountInputStream extends FilterInputStream {
+    private int count = 0;
+
+    CountInputStream(InputStream in) {
+        super(in);
+    }
+
+    public int getBytesRead() {
+        return this.count;
+    }
+
+    public int read() throws IOException {
+        int n = in.read();
+        if (n != -1) {
+            this.count ++;
+        }
+        return n;
+    }
+
+    public int read(byte[] b, int off, int len) throws IOException {
+        int n = in.read(b, off, len);
+        this.count += n;
+        return n;
+    }
+}
+```
+
+注意到在叠加多个`FilterInputStream`，我们只需要持有最外层的`InputStream`，并且，当最外层的`InputStream`关闭时（在`try(resource)`块的结束处自动关闭），内层的`InputStream`的`close()`方法也会被自动调用，并最终调用到最核心的“基础”`InputStream`，因此不存在资源泄露。
+
+#### 9.4.2 小结
+
+Java的IO标准库使用Filter模式为`InputStream`和`OutputStream`增加功能：
+
+- 可以把一个`InputStream`和任意个`FilterInputStream`组合；
+- 可以把一个`OutputStream`和任意个`FilterOutputStream`组合。
+
+Filter模式可以在运行期动态增加功能（又称Decorator模式）。
+
+### 9.5 操作Zip
+
+`ZipInputStream`是一种`FilterInputStream`，它可以直接读取zip包的内容：
+
+```ascii
+┌───────────────────┐
+│    InputStream    │
+└───────────────────┘
+          ▲
+          │
+┌───────────────────┐
+│ FilterInputStream │
+└───────────────────┘
+          ▲
+          │
+┌───────────────────┐
+│InflaterInputStream│
+└───────────────────┘
+          ▲
+          │
+┌───────────────────┐
+│  ZipInputStream   │
+└───────────────────┘
+          ▲
+          │
+┌───────────────────┐
+│  JarInputStream   │
+└───────────────────┘
+```
+
+另一个`JarInputStream`是从`ZipInputStream`派生，它增加的主要功能是直接读取jar文件里面的`MANIFEST.MF`文件。因为本质上jar包就是zip包，只是额外附加了一些固定的描述文件。
+
+#### 9.5.1 读取zip包
+
+我们来看看`ZipInputStream`的基本用法。
+
+我们要创建一个`ZipInputStream`，通常是传入一个`FileInputStream`作为数据源，然后，循环调用`getNextEntry()`，直到返回`null`，表示zip流结束。
+
+一个`ZipEntry`表示一个压缩文件或目录，如果是压缩文件，我们就用`read()`方法不断读取，直到返回`-1`：
+
+```java
+try (ZipInputStream zip = new ZipInputStream(new FileInputStream(...))) {
+    ZipEntry entry = null;
+    while ((entry = zip.getNextEntry()) != null) {
+        String name = entry.getName();
+        if (!entry.isDirectory()) {
+            int n;
+            while ((n = zip.read()) != -1) {
+                ...
+            }
+        }
+    }
+}
+```
+
+#### 9.5.2 写入zip包
+
+`ZipOutputStream`是一种`FilterOutputStream`，它可以直接写入内容到zip包。我们要先创建一个`ZipOutputStream`，通常是包装一个`FileOutputStream`，然后，每写入一个文件前，先调用`putNextEntry()`，然后用`write()`写入`byte[]`数据，写入完毕后调用`closeEntry()`结束这个文件的打包。
+
+```java
+try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(...))) {
+    File[] files = ...
+    for (File file : files) {
+        zip.putNextEntry(new ZipEntry(file.getName()));
+        zip.write(getFileDataAsBytes(file));
+        zip.closeEntry();
+    }
+}
+```
+
+上面的代码没有考虑文件的目录结构。如果要实现目录层次结构，`new ZipEntry(name)`传入的`name`要用相对路径。
+
+#### 9.5.3 小结
+
+`ZipInputStream`可以读取zip格式的流，`ZipOutputStream`可以把多份数据写入zip包；
+
+配合`FileInputStream`和`FileOutputStream`就可以读写zip文件。
+
+### 9.6 读取classpath资源
+
+很多Java程序启动的时候，都需要读取配置文件。例如，从一个`.properties`文件中读取配置：
+
+```java
+String conf = "C:\\conf\\default.properties";
+try (InputStream input = new FileInputStream(conf)) {
+    // TODO:
+}
+```
+
+这段代码要正常执行，必须在C盘创建`conf`目录，然后在目录里创建`default.properties`文件。但是，在Linux系统上，路径和Windows的又不一样。因此，从磁盘的固定目录读取配置文件，不是一个好的办法。有没有路径无关的读取文件的方式呢？我们知道，Java存放`.class`的目录或jar包也可以包含任意其他类型的文件，例如：
+
+- 配置文件，例如`.properties`；
+- 图片文件，例如`.jpg`；
+- 文本文件，例如`.txt`，`.csv`；
+- ……
+
+从classpath读取文件就可以避免不同环境下文件路径不一致的问题：如果我们把`default.properties`文件放到classpath中，就不用关心它的实际存放路径。在classpath中的资源文件，路径总是以`／`开头，我们先获取当前的`Class`对象，然后调用`getResourceAsStream()`就可以直接从classpath读取任意的资源文件：
+
+```java
+try (InputStream input = getClass().getResourceAsStream("/default.properties")) {
+    // TODO:
+}
+```
+
+调用`getResourceAsStream()`需要特别注意的一点是，如果资源文件不存在，它将返回`null`。因此，我们需要检查返回的`InputStream`是否为`null`，如果为`null`，表示资源文件在classpath中没有找到：
+
+```java
+try (InputStream input = getClass().getResourceAsStream("/default.properties")) {
+    if (input != null) {
+        // TODO:
+    }
+}
+```
+
+如果我们把默认的配置放到jar包中，再从外部文件系统读取一个可选的配置文件，就可以做到既有默认的配置文件，又可以让用户自己修改配置：
+
+```java
+Properties props = new Properties();
+props.load(inputStreamFromClassPath("/default.properties"));
+props.load(inputStreamFromFile("./conf.properties"));
+```
+
+这样读取配置文件，应用程序启动就更加灵活。
+
+#### 9.6.1 小结
+
+把资源存储在classpath中可以避免文件路径依赖；
+
+`Class`对象的`getResourceAsStream()`可以从classpath中读取指定资源；
+
+根据classpath读取资源时，需要检查返回的`InputStream`是否为`null`。
+
+### 9.7 序列化
+
+序列化是指把一个Java对象变成二进制内容，本质上就是一个`byte[]`数组。
+
+为什么要把Java对象序列化呢？因为序列化后可以把`byte[]`保存到文件中，或者把`byte[]`通过网络传输到远程，这样，就相当于把Java对象存储到文件或者通过网络传输出去了。
+
+有序列化，就有反序列化，即把一个二进制内容（也就是`byte[]`数组）变回Java对象。有了反序列化，保存到文件中的`byte[]`数组又可以“变回”Java对象，或者从网络上读取`byte[]`并把它“变回”Java对象。
+
+我们来看看如何把一个Java对象序列化。
+
+一个Java对象要能序列化，必须实现一个特殊的`java.io.Serializable`接口，它的定义如下：
+
+```java
+public interface Serializable {
+}
+```
+
+`Serializable`接口没有定义任何方法，它是一个空接口。我们把这样的**空接口称为“标记接口”**（Marker Interface），实现了标记接口的类仅仅是给自身贴了个“标记”，并没有增加任何方法。
+
+#### 9.7.1 序列化
+
+把一个Java对象变为`byte[]`数组，需要使用`ObjectOutputStream`。它负责把一个Java对象写入一个字节流：
+
+```java
+import java.io.*;
+import java.util.Arrays;
+public class Main {
+    public static void main(String[] args) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ObjectOutputStream output = new ObjectOutputStream(buffer)) {
+            // 写入int:
+            output.writeInt(12345);
+            // 写入String:
+            output.writeUTF("Hello");
+            // 写入Object:
+            output.writeObject(Double.valueOf(123.456));
+        }
+        System.out.println(Arrays.toString(buffer.toByteArray()));
+    }
+}
+```
+
+`ObjectOutputStream`既可以写入基本类型，如`int`，`boolean`，也可以写入`String`（以UTF-8编码），还可以写入实现了`Serializable`接口的`Object`。因为写入`Object`时需要大量的类型信息，所以写入的内容很大。
+
+#### 9.7.2 反序列化
+
+和`ObjectOutputStream`相反，`ObjectInputStream`负责从一个字节流读取Java对象：
+
+```java
+try (ObjectInputStream input = new ObjectInputStream(...)) {
+    int n = input.readInt();
+    String s = input.readUTF();
+    Double d = (Double) input.readObject();
+}
+```
+
+除了能读取基本类型和`String`类型外，调用`readObject()`可以直接返回一个`Object`对象。要把它变成一个特定类型，必须强制转型。
+
+`readObject()`可能抛出的异常有：
+
+- `ClassNotFoundException`：没有找到对应的Class；
+- `InvalidClassException`：Class不匹配。
+
+对于`ClassNotFoundException`，这种情况常见于一台电脑上的Java程序把一个Java对象，例如，`Person`对象序列化以后，通过网络传给另一台电脑上的另一个Java程序，但是这台电脑的Java程序并没有定义`Person`类，所以无法反序列化。
+
+对于`InvalidClassException`，这种情况常见于序列化的`Person`对象定义了一个`int`类型的`age`字段，但是反序列化时，`Person`类定义的`age`字段被改成了`long`类型，所以导致class不兼容。
+
+为了避免这种class定义变动导致的不兼容，Java的序列化允许class定义一个特殊的`serialVersionUID`静态变量，用于标识Java类的序列化“版本”，通常可以由IDE自动生成。如果增加或修改了字段，可以改变`serialVersionUID`的值，这样就能自动阻止不匹配的class版本：
+
+```java
+public class Person implements Serializable {
+    private static final long serialVersionUID = 2709425275741743919L;
+}
+```
+
+要特别注意反序列化的几个重要特点：
+
+反序列化时，由JVM直接构造出Java对象，不调用构造方法，构造方法内部的代码，在反序列化时根本不可能执行。
+
+#### 9.7.3 安全性
+
+因为Java的序列化机制可以导致一个实例能直接从`byte[]`数组创建，而不经过构造方法，因此，它存在一定的安全隐患。一个精心构造的`byte[]`数组被反序列化后可以执行特定的Java代码，从而导致严重的安全漏洞。
+
+实际上，Java本身提供的基于对象的序列化和反序列化机制既存在安全性问题，也存在兼容性问题。更好的序列化方法是通过JSON这样的通用数据结构来实现，只输出基本类型（包括String）的内容，而不存储任何与代码相关的信息。
+
+#### 9.7.4 小结
+
+可序列化的Java对象必须实现`java.io.Serializable`接口，类似`Serializable`这样的空接口被称为“标记接口”（Marker Interface）；
+
+反序列化时不调用构造方法，可设置`serialVersionUID`作为版本号（非必需）；
+
+Java的序列化机制仅适用于Java，如果需要与其它语言交换数据，必须使用通用的序列化方法，例如JSON。
+
+### 9.8 Reader
+
+`Reader`是Java的IO库提供的另一个输入流接口。和`InputStream`的区别是，`InputStream`是一个字节流，即以`byte`为单位读取，而`Reader`是一个字符流，即以`char`为单位读取：
+
+| InputStream                         | Reader                                |
+| :---------------------------------- | :------------------------------------ |
+| 字节流，以`byte`为单位              | 字符流，以`char`为单位                |
+| 读取字节（-1，0~255）：`int read()` | 读取字符（-1，0~65535）：`int read()` |
+| 读到字节数组：`int read(byte[] b)`  | 读到字符数组：`int read(char[] c)`    |
+
+`java.io.Reader`是所有字符输入流的超类，它最主要的方法是：
+
+```java
+public int read() throws IOException;
+```
+
+这个方法读取字符流的下一个字符，并返回字符表示的`int`，范围是`0`~`65535`。如果已读到末尾，返回`-1`。
+
+#### 9.8.1 FileReader
+
+`FileReader`是`Reader`的一个子类，它可以打开文件并获取`Reader`。下面的代码演示了如何完整地读取一个`FileReader`的所有字符：
+
+```java
+public void readFile() throws IOException {
+    // 创建一个FileReader对象:
+    Reader reader = new FileReader("src/readme.txt"); // 字符编码是???
+    for (;;) {
+        int n = reader.read(); // 反复调用read()方法，直到返回-1
+        if (n == -1) {
+            break;
+        }
+        System.out.println((char)n); // 打印char
+    }
+    reader.close(); // 关闭流
+}
+```
+
+如果我们读取一个纯ASCII编码的文本文件，上述代码工作是没有问题的。但如果文件中包含中文，就会出现乱码，因为`FileReader`默认的编码与系统相关，例如，Windows系统的默认编码可能是`GBK`，打开一个`UTF-8`编码的文本文件就会出现乱码。
+
+要避免乱码问题，我们需要在创建`FileReader`时指定编码：
+
+```java
+Reader reader = new FileReader("src/readme.txt", StandardCharsets.UTF_8);
+```
+
+和`InputStream`类似，`Reader`也是一种资源，需要保证出错的时候也能正确关闭，所以我们需要用`try (resource)`来保证`Reader`在无论有没有IO错误的时候都能够正确地关闭：
+
+```java
+try (Reader reader = new FileReader("src/readme.txt", StandardCharsets.UTF_8) {
+    // TODO
+}
+```
+
+`Reader`还提供了一次性读取若干字符并填充到`char[]`数组的方法：
+
+```java
+public int read(char[] c) throws IOException
+```
+
+它返回实际读入的字符个数，最大不超过`char[]`数组的长度。返回`-1`表示流结束。
+
+利用这个方法，我们可以先设置一个缓冲区，然后，每次尽可能地填充缓冲区：
+
+```java
+public void readFile() throws IOException {
+    try (Reader reader = new FileReader("src/readme.txt", StandardCharsets.UTF_8)) {
+        char[] buffer = new char[1000];
+        int n;
+        while ((n = reader.read(buffer)) != -1) {
+            System.out.println("read " + n + " chars.");
+        }
+    }
+}
+```
+
+#### 9.8.2 CharArrayReader
+
+`CharArrayReader`可以在内存中模拟一个`Reader`，它的作用实际上是把一个`char[]`数组变成一个`Reader`，这和`ByteArrayInputStream`非常类似：
+
+```java
+try (Reader reader = new CharArrayReader("Hello".toCharArray())) {
+}
+```
+
+#### 9.8.3 StringReader
+
+`StringReader`可以直接把`String`作为数据源，它和`CharArrayReader`几乎一样：
+
+```java
+try (Reader reader = new StringReader("Hello")) {
+}
+```
+
+#### 9.8.4 InputStreamReader
+
+`Reader`和`InputStream`有什么关系？
+
+除了特殊的`CharArrayReader`和`StringReader`，普通的`Reader`实际上是基于`InputStream`构造的，因为`Reader`需要从`InputStream`中读入字节流（`byte`），然后，根据编码设置，再转换为`char`就可以实现字符流。如果我们查看`FileReader`的源码，它在内部实际上持有一个`FileInputStream`。
+
+既然`Reader`本质上是一个基于`InputStream`的`byte`到`char`的转换器，那么，如果我们已经有一个`InputStream`，想把它转换为`Reader`，是完全可行的。`InputStreamReader`就是这样一个转换器，它可以把任何`InputStream`转换为`Reader`。示例代码如下：
+
+```java
+// 持有InputStream:
+InputStream input = new FileInputStream("src/readme.txt");
+// 变换为Reader:
+Reader reader = new InputStreamReader(input, "UTF-8");
+```
+
+构造`InputStreamReader`时，我们需要传入`InputStream`，还需要指定编码，就可以得到一个`Reader`对象。上述代码可以通过`try (resource)`更简洁地改写如下：
+
+```java
+try (Reader reader = new InputStreamReader(new FileInputStream("src/readme.txt"), "UTF-8")) {
+    // TODO:
+}
+```
+
+上述代码实际上就是`FileReader`的一种实现方式。
+
+使用`try (resource)`结构时，当我们关闭`Reader`时，它会在内部自动调用`InputStream`的`close()`方法，所以，只需要关闭最外层的`Reader`对象即可。
+
+ 使用InputStreamReader，可以把一个InputStream转换成一个Reader。
+
+#### 9.8.5 小结
+
+`Reader`定义了所有字符输入流的超类：
+
+- `FileReader`实现了文件字符流输入，使用时需要指定编码；
+- `CharArrayReader`和`StringReader`可以在内存中模拟一个字符流输入。
+
+`Reader`是基于`InputStream`构造的：可以通过`InputStreamReader`在指定编码的同时将任何`InputStream`转换为`Reader`。
+
+总是使用`try (resource)`保证`Reader`正确关闭。
+
+### 9.9 Writer
+
+`Reader`是带编码转换器的`InputStream`，它把`byte`转换为`char`，而`Writer`就是带编码转换器的`OutputStream`，它把`char`转换为`byte`并输出。
+
+`Writer`和`OutputStream`的区别如下：
+
+| OutputStream                           | Writer                                   |
+| :------------------------------------- | :--------------------------------------- |
+| 字节流，以`byte`为单位                 | 字符流，以`char`为单位                   |
+| 写入字节（0~255）：`void write(int b)` | 写入字符（0~65535）：`void write(int c)` |
+| 写入字节数组：`void write(byte[] b)`   | 写入字符数组：`void write(char[] c)`     |
+| 无对应方法                             | 写入String：`void write(String s)`       |
+
+`Writer`是所有字符输出流的超类，它提供的方法主要有：
+
+- 写入一个字符（0~65535）：`void write(int c)`；
+- 写入字符数组的所有字符：`void write(char[] c)`；
+- 写入String表示的所有字符：`void write(String s)`。
+
+#### 9.9.1 FileWriter
+
+`FileWriter`就是向文件中写入字符流的`Writer`。它的使用方法和`FileReader`类似：
+
+```java
+try (Writer writer = new FileWriter("readme.txt", StandardCharsets.UTF_8)) {
+    writer.write('H'); // 写入单个字符
+    writer.write("Hello".toCharArray()); // 写入char[]
+    writer.write("Hello"); // 写入String
+}
+```
+
+#### 9.9.2 CharArrayWriter
+
+`CharArrayWriter`可以在内存中创建一个`Writer`，它的作用实际上是构造一个缓冲区，可以写入`char`，最后得到写入的`char[]`数组，这和`ByteArrayOutputStream`非常类似：
+
+```java
+try (CharArrayWriter writer = new CharArrayWriter()) {
+    writer.write(65);
+    writer.write(66);
+    writer.write(67);
+    char[] data = writer.toCharArray(); // { 'A', 'B', 'C' }
+}
+```
+
+#### 9.9.3 StringWriter
+
+`StringWriter`也是一个基于内存的`Writer`，它和`CharArrayWriter`类似。实际上，`StringWriter`在内部维护了一个`StringBuffer`，并对外提供了`Writer`接口。
+
+#### 9.9.4 OutputStreamWriter
+
+除了`CharArrayWriter`和`StringWriter`外，普通的Writer实际上是基于`OutputStream`构造的，它接收`char`，然后在内部自动转换成一个或多个`byte`，并写入`OutputStream`。因此，`OutputStreamWriter`就是一个将任意的`OutputStream`转换为`Writer`的转换器：
+
+```java
+try (Writer writer = new OutputStreamWriter(new FileOutputStream("readme.txt"), "UTF-8")) {
+    // TODO:
+}
+```
+
+上述代码实际上就是`FileWriter`的一种实现方式。这和上一节的`InputStreamReader`是一样的。
+
+#### 9.9.5 小结
+
+`Writer`定义了所有字符输出流的超类：
+
+- `FileWriter`实现了文件字符流输出；
+- `CharArrayWriter`和`StringWriter`在内存中模拟一个字符流输出。
+
+使用`try (resource)`保证`Writer`正确关闭。
+
+`Writer`是基于`OutputStream`构造的，可以通过`OutputStreamWriter`将`OutputStream`转换为`Writer`，转换时需要指定编码。
+
+### 9.10 PrintStream和PrintWriter
+
+`PrintStream`是一种`FilterOutputStream`，它在`OutputStream`的接口上，额外提供了一些写入各种数据类型的方法：
+
+- 写入`int`：`print(int)`
+- 写入`boolean`：`print(boolean)`
+- 写入`String`：`print(String)`
+- 写入`Object`：`print(Object)`，实际上相当于`print(object.toString())`
+- ...
+
+以及对应的一组`println()`方法，它会自动加上换行符。
+
+我们经常使用的`System.out.println()`实际上就是使用`PrintStream`打印各种数据。其中，`System.out`是系统默认提供的`PrintStream`，表示标准输出：
+
+```java
+System.out.print(12345); // 输出12345
+System.out.print(new Object()); // 输出类似java.lang.Object@3c7a835a
+System.out.println("Hello"); // 输出Hello并换行
+```
+
+`System.err`是系统默认提供的标准错误输出。
+
+`PrintStream`和`OutputStream`相比，除了添加了一组`print()`/`println()`方法，可以打印各种数据类型，比较方便外，它还有一个额外的优点，就是不会抛出`IOException`，这样我们在编写代码的时候，就不必捕获`IOException`。
+
+#### 9.10.1 PrintWriter
+
+`PrintStream`最终输出的总是byte数据，而`PrintWriter`则是扩展了`Writer`接口，它的`print()`/`println()`方法最终输出的是`char`数据。两者的使用方法几乎是一模一样的：
+
+```java
+import java.io.*;
+public class Main {
+    public static void main(String[] args)     {
+        StringWriter buffer = new StringWriter();
+        try (PrintWriter pw = new PrintWriter(buffer)) {
+            pw.println("Hello");
+            pw.println(12345);
+            pw.println(true);
+        }
+        System.out.println(buffer.toString());
+    }
+}
+```
+
+#### 9.10.2 小结
+
+`PrintStream`是一种能接收各种数据类型的输出，打印数据时比较方便：
+
+- `System.out`是标准输出；
+- `System.err`是标准错误输出。
+
+`PrintWriter`是基于`Writer`的输出。
+
+## 10 日期与时间
+
+### 10.1 基本概念
+
+在计算机中，我们经常需要处理日期和时间。
+
+这是日期：
+
+- 2019-11-20
+- 2020-1-1
+
+这是时间：
+
+- 12:30:59
+- 2020-1-1 20:21:59
+
+日期是指某一天，它不是连续变化的，而是应该被看成离散的。
+
+而时间有两种概念，一种是不带日期的时间，例如，12:30:59。另一种是带日期的时间，例如，2020-1-1 20:21:59，只有这种带日期的时间能唯一确定某个时刻，不带日期的时间是无法确定一个唯一时刻的。
+
+#### 10.1.1 本地时间
+
+当我们说当前时刻是2019年11月20日早上8:15的时候，我们说的实际上是本地时间。在国内就是北京时间。在这个时刻，如果地球上不同地方的人们同时看一眼手表，他们各自的本地时间是不同的，所以，不同的时区，在同一时刻，本地时间是不同的。全球一共分为24个时区，伦敦所在的时区称为标准时区，其他时区按东／西偏移的小时区分，北京所在的时区是东八区。
+
+#### 10.1.2 时区
+
+因为光靠本地时间还无法唯一确定一个准确的时刻，所以我们还需要给本地时间加上一个时区。时区有好几种表示方式。
+
+一种是以`GMT`或者`UTC`加时区偏移表示，例如：`GMT+08:00`或者`UTC+08:00`表示东八区。
+
+`GMT`和`UTC`可以认为基本是等价的，只是`UTC`使用更精确的原子钟计时，每隔几年会有一个闰秒，我们在开发程序的时候可以忽略两者的误差，因为计算机的时钟在联网的时候会自动与时间服务器同步时间。
+
+另一种是缩写，例如，`CST`表示`China Standard Time`，也就是中国标准时间。但是`CST`也可以表示美国中部时间`Central Standard Time USA`，因此，缩写容易产生混淆，我们尽量不要使用缩写。
+
+最后一种是以洲／城市表示，例如，`Asia/Shanghai`，表示上海所在地的时区。特别注意城市名称不是任意的城市，而是由国际标准组织规定的城市。
+
+因为时区的存在，东八区的2019年11月20日早上8:15，和西五区的2019年11月19日晚上19:15，他们的时刻是相同的，时刻相同的意思就是，分别在两个时区的两个人，如果在这一刻通电话，他们各自报出自己手表上的时间，虽然本地时间是不同的，但是这两个时间表示的时刻是相同的。
+
+#### 10.1.3 夏令时
+
+时区还不是最复杂的，更复杂的是夏令时。所谓夏令时，就是夏天开始的时候，把时间往后拨1小时，夏天结束的时候，再把时间往前拨1小时。我们国家实行过一段时间夏令时，1992年就废除了，但是矫情的美国人到现在还在使用，所以时间换算更加复杂。
+
+因为涉及到夏令时，相同的时区，如果表示的方式不同，转换出的时间是不同的。我们举个栗子：
+
+对于2019-11-20和2019-6-20两个日期来说，假设北京人在纽约：
+
+- 如果以`GMT`或者`UTC`作为时区，无论日期是多少，时间都是`19:00`；
+- 如果以国家／城市表示，例如`America／NewYork`，虽然纽约也在西五区，但是，因为夏令时的存在，在不同的日期，`GMT`时间和纽约时间可能是不一样的：
+
+| 时区             | 2019-11-20 | 2019-6-20 |
+| :--------------- | :--------- | :-------- |
+| GMT-05:00        | 19:00      | 19:00     |
+| UTC-05:00        | 19:00      | 19:00     |
+| America/New_York | 19:00      | 20:00     |
+
+实行夏令时的不同地区，进入和退出夏令时的时间很可能是不同的。同一个地区，根据历史上是否实行过夏令时，标准时间在不同年份换算成当地时间也是不同的。因此，计算夏令时，没有统一的公式，必须按照一组给定的规则来算，并且，该规则要定期更新。
+
+ **计算夏令时请使用标准库提供的相关类，不要试图自己计算夏令时。**
+
+#### 10.1.4 本地化
+
+在计算机中，通常使用`Locale`表示一个国家或地区的日期、时间、数字、货币等格式。`Locale`由`语言_国家`的字母缩写构成，例如，`zh_CN`表示中文+中国，`en_US`表示英文+美国。语言使用小写，国家使用大写。
+
+对于日期来说，不同的Locale，例如，中国和美国的表示方式如下：
+
+- zh_CN：2016-11-30
+- en_US：11/30/2016
+
+计算机用`Locale`在日期、时间、货币和字符串之间进行转换。一个电商网站会根据用户所在的`Locale`对用户显示如下：
+
+|          | 中国用户   | 美国用户   |
+| :------- | :--------- | :--------- |
+| 购买价格 | 12000.00   | 12,000.00  |
+| 购买日期 | 2016-11-30 | 11/30/2016 |
+
+#### 10.1.5 小结
+
+在编写日期和时间的程序前，我们要准确理解日期、时间和时刻的概念。
+
+由于存在本地时间，我们需要理解时区的概念，并且必须牢记由于夏令时的存在，同一地区用`GMT/UTC`和城市表示的时区可能导致时间不同。
+
+计算机通过`Locale`来针对当地用户习惯格式化日期、时间、数字、货币等。
+
+### 10.2 Date和Calendar
+
+在计算机中，应该如何表示日期和时间呢？
+
+我们经常看到的日期和时间表示方式如下：
+
+- 2019-11-20 0:15:00 GMT+00:00
+- 2019年11月20日8:15:00
+- 11/19/2019 19:15:00 America/New_York
+
+如果直接以字符串的形式存储，那么不同的格式，不同的语言会让表示方式非常繁琐。
+
+在理解日期和时间的表示方式之前，我们先要理解数据的存储和展示。
+
+当我们定义一个整型变量并赋值时：
+
+```java
+int n = 123400;
+```
+
+编译器会把上述字符串（程序源码就是一个字符串）编译成字节码。在程序的运行期，变量`n`指向的内存实际上是一个4字节区域：
+
+```ascii
+┌──┬──┬──┬──┐
+│00│01│e2│08│
+└──┴──┴──┴──┘
+```
+
+注意到计算机内存除了二进制的`0`/`1`外没有其他任何格式。上述十六机制是为了简化表示。当我们用`System.out.println(n)`打印这个整数的时候，实际上`println()`这个方法在内部把`int`类型转换成`String`类型，然后打印出字符串`123400`。类似的，我们也可以以十六进制的形式打印这个整数，或者，如果`n`表示一个价格，我们就以`$123,400.00`的形式来打印它：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        int n = 123400;
+        // 123400
+        System.out.println(n);
+        // 1e208
+        System.out.println(Integer.toHexString(n));
+        // $123,400.00
+        System.out.println(NumberFormat.getCurrencyInstance(Locale.US).format(n));
+    }
+}
+```
+
+可见，整数`123400`是数据的存储格式，它的存储格式非常简单。而我们打印的各种各样的字符串，则是数据的展示格式。展示格式有多种形式，但本质上它就是一个转换方法：
+
+```java
+String toDisplay(int n) { ... }
+```
+
+理解了数据的存储和展示，我们回头看看以下几种日期和时间：
+
+- 2019-11-20 0:15:01 GMT+00:00
+- 2019年11月20日8:15:01
+- 11/19/2019 19:15:01 America/New_York
+
+它们实际上是数据的展示格式，分别按英国时区、中国时区、纽约时区对同一个时刻进行展示。而这个“同一个时刻”在计算机中存储的本质上只是一个整数，我们称它为`Epoch Time`。
+
+`Epoch Time`是计算从1970年1月1日零点（格林威治时区／GMT+00:00）到现在所经历的秒数，例如：
+
+`1574208900`表示从从1970年1月1日零点GMT时区到该时刻一共经历了1574208900秒，换算成伦敦、北京和纽约时间分别是：
+
+```java
+1574208900 = 北京时间2019-11-20 8:15:00
+           = 伦敦时间2019-11-20 0:15:00
+           = 纽约时间2019-11-19 19:15:00
+```
+
+因此，在计算机中，只需要存储一个整数`1574208900`表示某一时刻。当需要显示为某一地区的当地时间时，我们就把它格式化为一个字符串：
+
+```java
+String displayDateTime(int n, String timezone) { ... }
+```
+
+`Epoch Time`又称为时间戳，在不同的编程语言中，会有几种存储方式：
+
+- 以秒为单位的整数：1574208900，缺点是精度只能到秒；
+- 以毫秒为单位的整数：1574208900123，最后3位表示毫秒数；
+- 以秒为单位的浮点数：1574208900.123，小数点后面表示零点几秒。
+
+它们之间转换非常简单。而在Java程序中，时间戳通常是用`long`表示的毫秒数，即：
+
+```java
+long t = 1574208900123L;
+```
+
+转换成北京时间就是`2019-11-20T8:15:00.123`。要获取当前时间戳，可以使用`System.currentTimeMillis()`，这是Java程序获取时间戳最常用的方法。
+
+#### 10.2.1 标准库API
+
+我们再来看一下Java标准库提供的API。Java标准库有两套处理日期和时间的API：
+
+- 一套定义在`java.util`这个包里面，主要包括`Date`、`Calendar`和`TimeZone`这几个类；
+- 一套新的API是在Java 8引入的，定义在`java.time`这个包里面，主要包括`LocalDateTime`、`ZonedDateTime`、`ZoneId`等。
+
+为什么会有新旧两套API呢？因为历史遗留原因，旧的API存在很多问题，所以引入了新的API。
+
+那么我们能不能跳过旧的API直接用新的API呢？如果涉及到遗留代码就不行，因为很多遗留代码仍然使用旧的API，所以目前仍然需要对旧的API有一定了解，很多时候还需要在新旧两种对象之间进行转换。
+
+本节我们快速讲解旧API的常用类型和方法。
+
+#### 10.2.2 Date
+
+`java.util.Date`是用于表示一个日期和时间的对象，注意与`java.sql.Date`区分，后者用在数据库中。如果观察Date的源码，可以发现它实际上存储了一个long类型的以毫秒表示的时间戳：
+
+```java
+public class Date implements Serializable, Cloneable, Comparable<Date> {
+
+    private transient long fastTime;
+
+    ...
+}
+```
+
+我们来看Date的基本用法：
+
+```java
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 获取当前时间:
+        Date date = new Date();
+        System.out.println(date.getYear() + 1900); // 必须加上1900
+        System.out.println(date.getMonth() + 1); // 0~11，必须加上1
+        System.out.println(date.getDate()); // 1~31，不能加1
+        // 转换为String:
+        System.out.println(date.toString());
+        // 转换为GMT时区:
+        System.out.println(date.toGMTString());
+        // 转换为本地时区:
+        System.out.println(date.toLocaleString());
+    }
+}
+```
+
+注意`getYear()`返回的年份必须加上`1900`，`getMonth()`返回的月份是`0`~`11`分别表示1~12月，所以要加1，而`getDate()`返回的日期范围是`1`~`31`，又不能加1。
+
+打印本地时区表示的日期和时间时，不同的计算机可能会有不同的结果。如果我们想要针对用户的偏好精确地控制日期和时间的格式，就可以使用`SimpleDateFormat`对一个`Date`进行转换。它用预定义的字符串表示格式化：
+
+- yyyy：年
+- MM：月
+- dd: 日
+- HH: 小时
+- mm: 分钟
+- ss: 秒
+
+我们来看如何以自定义的格式输出：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 获取当前时间:
+        Date date = new Date();
+        var sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        System.out.println(sdf.format(date));
+    }
+}
+```
+
+Java的格式化预定义了许多不同的格式，我们以`MMM`和`E`为例：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 获取当前时间:
+        Date date = new Date();
+        var sdf = new SimpleDateFormat("E MMM dd, yyyy");
+        System.out.println(sdf.format(date));
+    }
+}
+```
+
+上述代码在不同的语言环境会打印出类似`Sun Sep 15, 2019`这样的日期。可以从[JDK文档](https://docs.oracle.com/en/java/javase/12/docs/api/java.base/java/text/SimpleDateFormat.html)查看详细的格式说明。一般来说，字母越长，输出越长。以`M`为例，假设当前月份是9月：
+
+- `M`：输出`9`
+- `MM`：输出`09`
+- `MMM`：输出`Sep`
+- `MMMM`：输出`September`
+
+`Date`对象有几个严重的问题：它不能转换时区，除了`toGMTString()`可以按`GMT+0:00`输出外，Date总是以当前计算机系统的默认时区为基础进行输出。此外，我们也很难对日期和时间进行加减，计算两个日期相差多少天，计算某个月第一个星期一的日期等。
+
+#### 10.2.3 Calendar
+
+`Calendar`可以用于获取并设置年、月、日、时、分、秒，它和`Date`比，主要多了一个可以做简单的日期和时间运算的功能。
+
+我们来看`Calendar`的基本用法：
+
+```java
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 获取当前时间:
+        Calendar c = Calendar.getInstance();
+        int y = c.get(Calendar.YEAR);
+        int m = 1 + c.get(Calendar.MONTH);
+        int d = c.get(Calendar.DAY_OF_MONTH);
+        int w = c.get(Calendar.DAY_OF_WEEK);
+        int hh = c.get(Calendar.HOUR_OF_DAY);
+        int mm = c.get(Calendar.MINUTE);
+        int ss = c.get(Calendar.SECOND);
+        int ms = c.get(Calendar.MILLISECOND);
+        System.out.println(y + "-" + m + "-" + d + " " + w + " " + hh + ":" + mm + ":" + ss + "." + ms);
+    }
+}
+```
+
+注意到`Calendar`获取年月日这些信息变成了`get(int field)`，返回的年份不必转换，返回的月份仍然要加1，返回的星期要特别注意，`1`~`7`分别表示周日，周一，……，周六。
+
+`Calendar`只有一种方式获取，即`Calendar.getInstance()`，而且一获取到就是当前时间。如果我们想给它设置成特定的一个日期和时间，就必须先清除所有字段：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 当前时间:
+        Calendar c = Calendar.getInstance();
+        // 清除所有:
+        c.clear();
+        // 设置2019年:
+        c.set(Calendar.YEAR, 2019);
+        // 设置9月:注意8表示9月:
+        c.set(Calendar.MONTH, 8);
+        // 设置2日:
+        c.set(Calendar.DATE, 2);
+        // 设置时间:
+        c.set(Calendar.HOUR_OF_DAY, 21);
+        c.set(Calendar.MINUTE, 22);
+        c.set(Calendar.SECOND, 23);
+        System.out.println(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(c.getTime()));
+        // 2019-09-02 21:22:23
+    }
+}
+```
+
+利用`Calendar.getTime()`可以将一个`Calendar`对象转换成`Date`对象，然后就可以用`SimpleDateFormat`进行格式化了。
+
+#### 10.2.4 TimeZone
+
+`Calendar`和`Date`相比，它提供了时区转换的功能。时区用`TimeZone`对象表示：
+
+```java
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        TimeZone tzDefault = TimeZone.getDefault(); // 当前时区
+        TimeZone tzGMT9 = TimeZone.getTimeZone("GMT+09:00"); // GMT+9:00时区
+        TimeZone tzNY = TimeZone.getTimeZone("America/New_York"); // 纽约时区
+        System.out.println(tzDefault.getID()); // Asia/Shanghai
+        System.out.println(tzGMT9.getID()); // GMT+09:00
+        System.out.println(tzNY.getID()); // America/New_York
+    }
+}
+```
+
+时区的唯一标识是以字符串表示的ID，我们获取指定`TimeZone`对象也是以这个ID为参数获取，`GMT+09:00`、`Asia/Shanghai`都是有效的时区ID。要列出系统支持的所有ID，请使用`TimeZone.getAvailableIDs()`。
+
+有了时区，我们就可以对指定时间进行转换。例如，下面的例子演示了如何将北京时间`2019-11-20 8:15:00`转换为纽约时间：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 当前时间:
+        Calendar c = Calendar.getInstance();
+        // 清除所有:
+        c.clear();
+        // 设置为北京时区:
+        c.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
+        // 设置年月日时分秒:
+        c.set(2019, 10 /* 11月 */, 20, 8, 15, 0);
+        // 显示时间:
+        var sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        sdf.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+        System.out.println(sdf.format(c.getTime()));
+        // 2019-11-19 19:15:00
+    }
+}
+```
+
+可见，利用`Calendar`进行时区转换的步骤是：
+
+1. 清除所有字段；
+2. 设定指定时区；
+3. 设定日期和时间；
+4. 创建`SimpleDateFormat`并设定目标时区；
+5. 格式化获取的`Date`对象（注意`Date`对象无时区信息，时区信息存储在`SimpleDateFormat`中）。
+
+因此，本质上时区转换只能通过`SimpleDateFormat`在显示的时候完成。
+
+`Calendar`也可以对日期和时间进行简单的加减：
+
+```java
+import java.text.*;
+import java.util.*;
+public class Main {
+    public static void main(String[] args) {
+        // 当前时间:
+        Calendar c = Calendar.getInstance();
+        // 清除所有:
+        c.clear();
+        // 设置年月日时分秒:
+        c.set(2019, 10 /* 11月 */, 20, 8, 15, 0);
+        // 加5天并减去2小时:
+        c.add(Calendar.DAY_OF_MONTH, 5);
+        c.add(Calendar.HOUR_OF_DAY, -2);
+        // 显示时间:
+        var sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        Date d = c.getTime();
+        System.out.println(sdf.format(d));
+        // 2019-11-25 6:15:00
+    }
+}
+```
+
+#### 10.2.5 小结
+
+计算机表示的时间是以整数表示的时间戳存储的，即Epoch Time，Java使用`long`型来表示以毫秒为单位的时间戳，通过`System.currentTimeMillis()`获取当前时间戳。
+
+Java有两套日期和时间的API：
+
+- 旧的Date、Calendar和TimeZone；
+- 新的LocalDateTime、ZonedDateTime、ZoneId等。
+
+分别位于`java.util`和`java.time`包中。
+
+### 10.3 LocalDateTime
+
+从Java 8开始，`java.time`包提供了新的日期和时间API，主要涉及的类型有：
+
+- 本地日期和时间：`LocalDateTime`，`LocalDate`，`LocalTime`；
+- 带时区的日期和时间：`ZonedDateTime`；
+- 时刻：`Instant`；
+- 时区：`ZoneId`，`ZoneOffset`；
+- 时间间隔：`Duration`。
+
+以及一套新的用于取代`SimpleDateFormat`的格式化类型`DateTimeFormatter`。
+
+和旧的API相比，新API严格区分了时刻、本地日期、本地时间和带时区的日期时间，并且，对日期和时间进行运算更加方便。
+
+此外，新API修正了旧API不合理的常量设计：
+
+- Month的范围用1~12表示1月到12月；
+- Week的范围用1~7表示周一到周日。
+
+最后，新API的类型几乎全部是不变类型（和String类似），可以放心使用不必担心被修改。
+
+#### 10.3.1 LocalDateTime
+
+我们首先来看最常用的`LocalDateTime`，它表示一个本地日期和时间：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDate d = LocalDate.now(); // 当前日期
+        LocalTime t = LocalTime.now(); // 当前时间
+        LocalDateTime dt = LocalDateTime.now(); // 当前日期和时间
+        System.out.println(d); // 严格按照ISO 8601格式打印
+        System.out.println(t); // 严格按照ISO 8601格式打印
+        System.out.println(dt); // 严格按照ISO 8601格式打印
+    }
+}
+```
+
+本地日期和时间通过now()获取到的总是以当前默认时区返回的，和旧API不同，`LocalDateTime`、`LocalDate`和`LocalTime`默认严格按照[ISO 8601](https://www.iso.org/iso-8601-date-and-time-format.html)规定的日期和时间格式进行打印。
+
+上述代码其实有一个小问题，在获取3个类型的时候，由于执行一行代码总会消耗一点时间，因此，3个类型的日期和时间很可能对不上（时间的毫秒数基本上不同）。为了保证获取到同一时刻的日期和时间，可以改写如下：
+
+```java
+LocalDateTime dt = LocalDateTime.now(); // 当前日期和时间
+LocalDate d = dt.toLocalDate(); // 转换到当前日期
+LocalTime t = dt.toLocalTime(); // 转换到当前时间
+```
+
+反过来，通过指定的日期和时间创建`LocalDateTime`可以通过`of()`方法：
+
+```java
+// 指定日期和时间:
+LocalDate d2 = LocalDate.of(2019, 11, 30); // 2019-11-30, 注意11=11月
+LocalTime t2 = LocalTime.of(15, 16, 17); // 15:16:17
+LocalDateTime dt2 = LocalDateTime.of(2019, 11, 30, 15, 16, 17);
+LocalDateTime dt3 = LocalDateTime.of(d2, t2);
+```
+
+因为严格按照ISO 8601的格式，因此，将字符串转换为`LocalDateTime`就可以传入标准格式：
+
+```java
+LocalDateTime dt = LocalDateTime.parse("2019-11-19T15:16:17");
+LocalDate d = LocalDate.parse("2019-11-19");
+LocalTime t = LocalTime.parse("15:16:17");
+```
+
+注意ISO 8601规定的日期和时间分隔符是`T`。标准格式如下：
+
+- 日期：yyyy-MM-dd
+- 时间：HH:mm:ss
+- 带毫秒的时间：HH:mm:ss.SSS
+- 日期和时间：yyyy-MM-dd'T'HH:mm:ss
+- 带毫秒的日期和时间：yyyy-MM-dd'T'HH:mm:ss.SSS
+
+#### 10.3.2 DateTimeFormatter
+
+如果要自定义输出的格式，或者要把一个非ISO 8601格式的字符串解析成`LocalDateTime`，可以使用新的`DateTimeFormatter`：
+
+```java
+import java.time.*;
+import java.time.format.*;
+public class Main {
+    public static void main(String[] args) {
+        // 自定义格式化:
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+        System.out.println(dtf.format(LocalDateTime.now()));
+
+        // 用自定义格式解析:
+        LocalDateTime dt2 = LocalDateTime.parse("2019/11/30 15:16:17", dtf);
+        System.out.println(dt2);
+    }
+}
+```
+
+`LocalDateTime`提供了对日期和时间进行加减的非常简单的链式调用：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDateTime dt = LocalDateTime.of(2019, 10, 26, 20, 30, 59);
+        System.out.println(dt);
+        // 加5天减3小时:
+        LocalDateTime dt2 = dt.plusDays(5).minusHours(3);
+        System.out.println(dt2); // 2019-10-31T17:30:59
+        // 减1月:
+        LocalDateTime dt3 = dt2.minusMonths(1);
+        System.out.println(dt3); // 2019-09-30T17:30:59
+    }
+}
+```
+
+注意到月份加减会自动调整日期，例如从`2019-10-31`减去1个月得到的结果是`2019-09-30`，因为9月没有31日。
+
+对日期和时间进行调整则使用`withXxx()`方法，例如：`withHour(15)`会把`10:11:12`变为`15:11:12`：
+
+- 调整年：withYear()
+- 调整月：withMonth()
+- 调整日：withDayOfMonth()
+- 调整时：withHour()
+- 调整分：withMinute()
+- 调整秒：withSecond()
+
+示例代码如下：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDateTime dt = LocalDateTime.of(2019, 10, 26, 20, 30, 59);
+        System.out.println(dt);
+        // 日期变为31日:
+        LocalDateTime dt2 = dt.withDayOfMonth(31);
+        System.out.println(dt2); // 2019-10-31T20:30:59
+        // 月份变为9:
+        LocalDateTime dt3 = dt2.withMonth(9);
+        System.out.println(dt3); // 2019-09-30T20:30:59
+    }
+}
+```
+
+同样注意到调整月份时，会相应地调整日期，即把`2019-10-31`的月份调整为`9`时，日期也自动变为`30`。
+
+实际上，`LocalDateTime`还有一个通用的`with()`方法允许我们做更复杂的运算。例如：
+
+```java
+import java.time.*;
+import java.time.temporal.*;
+public class Main {
+    public static void main(String[] args) {
+        // 本月第一天0:00时刻:
+        LocalDateTime firstDay = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        System.out.println(firstDay);
+
+        // 本月最后1天:
+        LocalDate lastDay = LocalDate.now().with(TemporalAdjusters.lastDayOfMonth());
+        System.out.println(lastDay);
+
+        // 下月第1天:
+        LocalDate nextMonthFirstDay = LocalDate.now().with(TemporalAdjusters.firstDayOfNextMonth());
+        System.out.println(nextMonthFirstDay);
+
+        // 本月第1个周一:
+        LocalDate firstWeekday = LocalDate.now().with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));
+        System.out.println(firstWeekday);
+    }
+}
+```
+
+对于计算某个月第1个周日这样的问题，新的API可以轻松完成。
+
+要判断两个`LocalDateTime`的先后，可以使用`isBefore()`、`isAfter()`方法，对于`LocalDate`和`LocalTime`类似：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime target = LocalDateTime.of(2019, 11, 19, 8, 15, 0);
+        System.out.println(now.isBefore(target));
+        System.out.println(LocalDate.now().isBefore(LocalDate.of(2019, 11, 19)));
+        System.out.println(LocalTime.now().isAfter(LocalTime.parse("08:15:00")));
+    }
+}
+```
+
+注意到`LocalDateTime`无法与时间戳进行转换，因为`LocalDateTime`没有时区，无法确定某一时刻。后面我们要介绍的`ZonedDateTime`相当于`LocalDateTime`加时区的组合，它具有时区，可以与`long`表示的时间戳进行转换。
+
+#### 10.3.3 Duration和Period
+
+`Duration`表示两个时刻之间的时间间隔。另一个类似的`Period`表示两个日期之间的天数：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDateTime start = LocalDateTime.of(2019, 11, 19, 8, 15, 0);
+        LocalDateTime end = LocalDateTime.of(2020, 1, 9, 19, 25, 30);
+        Duration d = Duration.between(start, end);
+        System.out.println(d); // PT1235H10M30S
+
+        Period p = LocalDate.of(2019, 11, 19).until(LocalDate.of(2020, 1, 9));
+        System.out.println(p); // P1M21D
+    }
+}
+```
+
+注意到两个`LocalDateTime`之间的差值使用`Duration`表示，类似`PT1235H10M30S`，表示1235小时10分钟30秒。而两个`LocalDate`之间的差值用`Period`表示，类似`P1M21D`，表示1个月21天。
+
+`Duration`和`Period`的表示方法也符合ISO 8601的格式，它以`P...T...`的形式表示，`P...T`之间表示日期间隔，`T`后面表示时间间隔。如果是`PT...`的格式表示仅有时间间隔。利用`ofXxx()`或者`parse()`方法也可以直接创建`Duration`：
+
+```java
+Duration d1 = Duration.ofHours(10); // 10 hours
+Duration d2 = Duration.parse("P1DT2H3M"); // 1 day, 2 hours, 3 minutes
+```
+
+有的童鞋可能发现Java 8引入的`java.time`API。怎么和一个开源的[Joda Time](https://www.joda.org/)很像？难道JDK也开始抄袭开源了？其实正是因为开源的Joda Time设计很好，应用广泛，所以JDK团队邀请Joda Time的作者Stephen Colebourne共同设计了`java.time`API。
+
+#### 10.3.4 小结
+
+Java 8引入了新的日期和时间API，它们是不变类，默认按ISO 8601标准格式化和解析；
+
+使用`LocalDateTime`可以非常方便地对日期和时间进行加减，或者调整日期和时间，它总是返回新对象；
+
+使用`isBefore()`和`isAfter()`可以判断日期和时间的先后；
+
+使用`Duration`和`Period`可以表示两个日期和时间的“区间间隔”。
+
+### 10.4 ZonedDateTime
+
+`LocalDateTime`总是表示本地日期和时间，要表示一个带时区的日期和时间，我们就需要`ZonedDateTime`。
+
+可以简单地把`ZonedDateTime`理解成`LocalDateTime`加`ZoneId`。`ZoneId`是`java.time`引入的新的时区类，注意和旧的`java.util.TimeZone`区别。
+
+要创建一个`ZonedDateTime`对象，有以下几种方法，一种是通过`now()`方法返回当前时间：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        ZonedDateTime zbj = ZonedDateTime.now(); // 默认时区
+        ZonedDateTime zny = ZonedDateTime.now(ZoneId.of("America/New_York")); // 用指定时区获取当前时间
+        System.out.println(zbj);
+        System.out.println(zny);
+    }
+}
+```
+
+观察打印的两个`ZonedDateTime`，发现它们时区不同，但表示的时间都是同一时刻（毫秒数不同是执行语句时的时间差）：
+
+```shell
+2019-09-15T20:58:18.786182+08:00[Asia/Shanghai]
+2019-09-15T08:58:18.788860-04:00[America/New_York]
+```
+
+另一种方式是通过给一个`LocalDateTime`附加一个`ZoneId`，就可以变成`ZonedDateTime`：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        LocalDateTime ldt = LocalDateTime.of(2019, 9, 15, 15, 16, 17);
+        ZonedDateTime zbj = ldt.atZone(ZoneId.systemDefault());
+        ZonedDateTime zny = ldt.atZone(ZoneId.of("America/New_York"));
+        System.out.println(zbj);
+        System.out.println(zny);
+    }
+}
+```
+
+以这种方式创建的`ZonedDateTime`，它的日期和时间与`LocalDateTime`相同，但附加的时区不同，因此是两个不同的时刻：
+
+```java
+2019-09-15T15:16:17+08:00[Asia/Shanghai]
+2019-09-15T15:16:17-04:00[America/New_York]
+```
+
+#### 10.4.1 时区转换
+
+要转换时区，首先我们需要有一个`ZonedDateTime`对象，然后，通过`withZoneSameInstant()`将关联时区转换到另一个时区，转换后日期和时间都会相应调整。
+
+下面的代码演示了如何将北京时间转换为纽约时间：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        // 以中国时区获取当前时间:
+        ZonedDateTime zbj = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"));
+        // 转换为纽约时间:
+        ZonedDateTime zny = zbj.withZoneSameInstant(ZoneId.of("America/New_York"));
+        System.out.println(zbj);
+        System.out.println(zny);
+    }
+}
+```
+
+要特别注意，时区转换的时候，由于夏令时的存在，不同的日期转换的结果很可能是不同的。这是北京时间9月15日的转换结果：
+
+```shell
+2019-09-15T21:05:50.187697+08:00[Asia/Shanghai]
+2019-09-15T09:05:50.187697-04:00[America/New_York]
+```
+
+这是北京时间11月15日的转换结果：
+
+```shell
+2019-11-15T21:05:50.187697+08:00[Asia/Shanghai]
+2019-11-15T08:05:50.187697-05:00[America/New_York]
+```
+
+两次转换后的纽约时间有1小时的夏令时时差。
+
+ **涉及到时区时，千万不要自己计算时差，否则难以正确处理夏令时。**
+
+有了`ZonedDateTime`，将其转换为本地时间就非常简单：
+
+```java
+ZonedDateTime zdt = ...
+LocalDateTime ldt = zdt.toLocalDateTime();
+```
+
+转换为`LocalDateTime`时，直接丢弃了时区信息。
+
+#### 10.4.2 小结
+
+`ZonedDateTime`是带时区的日期和时间，可用于时区转换；
+
+`ZonedDateTime`和`LocalDateTime`可以相互转换。
+
+### 10.5 DateTimeFormatter
+
+使用旧的`Date`对象时，我们用`SimpleDateFormat`进行格式化显示。使用新的`LocalDateTime`或`ZonedLocalDateTime`时，我们要进行格式化显示，就要使用`DateTimeFormatter`。
+
+和`SimpleDateFormat`不同的是，`DateTimeFormatter`不但是不变对象，它还是线程安全的。线程的概念我们会在后面涉及到。现在我们只需要记住：因为`SimpleDateFormat`不是线程安全的，使用的时候，只能在方法内部创建新的局部变量。而`DateTimeFormatter`可以只创建一个实例，到处引用。
+
+创建`DateTimeFormatter`时，我们仍然通过传入格式化字符串实现：
+
+```java
+DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+```
+
+格式化字符串的使用方式与`SimpleDateFormat`完全一致。
+
+另一种创建`DateTimeFormatter`的方法是，传入格式化字符串时，同时指定`Locale`：
+
+```java
+DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E, yyyy-MMMM-dd HH:mm", Locale.US);
+```
+
+这种方式可以按照`Locale`默认习惯格式化。我们来看实际效果：
+
+```java
+import java.time.*;
+import java.time.format.*;
+import java.util.Locale;
+public class Main {
+    public static void main(String[] args) {
+        ZonedDateTime zdt = ZonedDateTime.now();
+        var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm ZZZZ");
+        System.out.println(formatter.format(zdt));
+
+        var zhFormatter = DateTimeFormatter.ofPattern("yyyy MMM dd EE HH:mm", Locale.CHINA);
+        System.out.println(zhFormatter.format(zdt));
+
+        var usFormatter = DateTimeFormatter.ofPattern("E, MMMM/dd/yyyy HH:mm", Locale.US);
+        System.out.println(usFormatter.format(zdt));
+    }
+}
+```
+
+在格式化字符串中，如果需要输出固定字符，可以用`'xxx'`表示。
+
+运行上述代码，分别以默认方式、中国地区和美国地区对当前时间进行显示，结果如下：
+
+```shell
+2019-09-15T23:16 GMT+08:00
+2019 9月 15 周日 23:16
+Sun, September/15/2019 23:16
+```
+
+当我们直接调用`System.out.println()`对一个`ZonedDateTime`或者`LocalDateTime`实例进行打印的时候，实际上，调用的是它们的`toString()`方法，默认的`toString()`方法显示的字符串就是按照`ISO 8601`格式显示的，我们可以通过`DateTimeFormatter`预定义的几个静态变量来引用：
+
+```java
+var ldt = LocalDateTime.now();
+System.out.println(DateTimeFormatter.ISO_DATE.format(ldt));
+System.out.println(DateTimeFormatter.ISO_DATE_TIME.format(ldt));
+```
+
+得到的输出和`toString()`类似：
+
+```shell
+2019-09-15
+2019-09-15T23:16:51.56217
+```
+
+#### 10.5.1 小结
+
+对`ZonedDateTime`或`LocalDateTime`进行格式化，需要使用`DateTimeFormatter`类；
+
+`DateTimeFormatter`可以通过格式化字符串和`Locale`对日期和时间进行定制输出。
+
+### 10.6 Instant
+
+计算机存储的当前时间，本质上只是一个不断递增的整数。Java提供的`System.currentTimeMillis()`返回的就是以毫秒表示的当前时间戳。
+
+这个当前时间戳在`java.time`中以`Instant`类型表示，我们用`Instant.now()`获取当前时间戳，效果和`System.currentTimeMillis()`类似：
+
+```java
+import java.time.*;
+public class Main {
+    public static void main(String[] args) {
+        Instant now = Instant.now();
+        System.out.println(now.getEpochSecond()); // 秒
+        System.out.println(now.toEpochMilli()); // 毫秒
+    }
+}
+```
+
+打印的结果类似：
+
+```java
+1568568760
+1568568760316
+```
+
+实际上，`Instant`内部只有两个核心字段：
+
+```java
+public final class Instant implements ... {
+    private final long seconds;
+    private final int nanos;
+}
+```
+
+一个是以秒为单位的时间戳，一个是更精确的纳秒精度。它和`System.currentTimeMillis()`返回的`long`相比，只是多了更高精度的纳秒。既然`Instant`就是时间戳，那么，给它附加上一个时区，就可以创建出`ZonedDateTime`：
+
+```java
+// 以指定时间戳创建Instant:
+Instant ins = Instant.ofEpochSecond(1568568760);
+ZonedDateTime zdt = ins.atZone(ZoneId.systemDefault());
+System.out.println(zdt); // 2019-09-16T01:32:40+08:00[Asia/Shanghai]
+```
+
+可见，对于某一个时间戳，给它关联上指定的`ZoneId`，就得到了`ZonedDateTime`，继而可以获得了对应时区的`LocalDateTime`。所以，`LocalDateTime`，`ZoneId`，`Instant`，`ZonedDateTime`和`long`都可以互相转换：
+
+```ascii
+┌─────────────┐
+│LocalDateTime│────┐
+└─────────────┘    │    ┌─────────────┐
+                   ├───>│ZonedDateTime│
+┌─────────────┐    │    └─────────────┘
+│   ZoneId    │────┘           ▲
+└─────────────┘      ┌─────────┴─────────┐
+                     │                   │
+                     ▼                   ▼
+              ┌─────────────┐     ┌─────────────┐
+              │   Instant   │<───>│    long     │
+              └─────────────┘     └─────────────┘
+```
+
+转换的时候，只需要留意`long`类型以毫秒还是秒为单位即可。
+
+#### 10.6.1小结
+
+`Instant`表示高精度时间戳，它可以和`ZonedDateTime`以及`long`互相转换。
+
+### 10.7 最佳实践
+
+由于Java提供了新旧两套日期和时间的API，除非涉及到遗留代码，否则我们应该坚持使用新的API。
+
+如果需要与遗留代码打交道，如何在新旧API之间互相转换呢？
+
+#### 10.7.1 旧API转新API
+
+如果要把旧式的`Date`或`Calendar`转换为新API对象，可以通过`toInstant()`方法转换为`Instant`对象，再继续转换为`ZonedDateTime`：
+
+```java
+// Date -> Instant:
+Instant ins1 = new Date().toInstant();
+
+// Calendar -> Instant -> ZonedDateTime:
+Calendar calendar = Calendar.getInstance();
+Instant ins2 = Calendar.getInstance().toInstant();
+ZonedDateTime zdt = ins2.atZone(calendar.getTimeZone().toZoneId());
+```
+
+从上面的代码还可以看到，旧的`TimeZone`提供了一个`toZoneId()`，可以把自己变成新的`ZoneId`。
+
+#### 10.7.2 新API转旧API
+
+如果要把新的`ZonedDateTime`转换为旧的API对象，只能借助`long`型时间戳做一个“中转”：
+
+```java
+// ZonedDateTime -> long:
+ZonedDateTime zdt = ZonedDateTime.now();
+long ts = zdt.toEpochSecond() * 1000;
+
+// long -> Date:
+Date date = new Date(ts);
+
+// long -> Calendar:
+Calendar calendar = Calendar.getInstance();
+calendar.clear();
+calendar.setTimeZone(TimeZone.getTimeZone(zdt.getZone().getId()));
+calendar.setTimeInMillis(zdt.toEpochSecond() * 1000);
+```
+
+从上面的代码还可以看到，新的`ZoneId`转换为旧的`TimeZone`，需要借助`ZoneId.getId()`返回的`String`完成。
+
+#### 10.7.3 在数据库中存储日期和时间
+
+除了旧式的`java.util.Date`，我们还可以找到另一个`java.sql.Date`，它继承自`java.util.Date`，但会自动忽略所有时间相关信息。这个奇葩的设计原因要追溯到数据库的日期与时间类型。
+
+在数据库中，也存在几种日期和时间类型：
+
+- `DATETIME`：表示日期和时间；
+- `DATE`：仅表示日期；
+- `TIME`：仅表示时间；
+- `TIMESTAMP`：和`DATETIME`类似，但是数据库会在创建或者更新记录的时候同时修改`TIMESTAMP`。
+
+在使用Java程序操作数据库时，我们需要把数据库类型与Java类型映射起来。下表是数据库类型与Java新旧API的映射关系：
+
+| 数据库    | 对应Java类（旧）   | 对应Java类（新） |
+| :-------- | :----------------- | :--------------- |
+| DATETIME  | java.util.Date     | LocalDateTime    |
+| DATE      | java.sql.Date      | LocalDate        |
+| TIME      | java.sql.Time      | LocalTime        |
+| TIMESTAMP | java.sql.Timestamp | LocalDateTime    |
+
+实际上，在数据库中，我们需要存储的最常用的是时刻（`Instant`），因为有了时刻信息，就可以根据用户自己选择的时区，显示出正确的本地时间。所以，最好的方法是直接用长整数`long`表示，在数据库中存储为`BIGINT`类型。
+
+通过存储一个`long`型时间戳，我们可以编写一个`timestampToString()`的方法，非常简单地为不同用户以不同的偏好来显示不同的本地时间：
+
+```java
+import java.time.*;
+import java.time.format.*;
+import java.util.Locale;
+public class Main {
+    public static void main(String[] args) {
+        long ts = 1574208900000L;
+        System.out.println(timestampToString(ts, Locale.CHINA, "Asia/Shanghai"));
+        System.out.println(timestampToString(ts, Locale.US, "America/New_York"));
+    }
+
+    static String timestampToString(long epochMilli, Locale lo, String zoneId) {
+        Instant ins = Instant.ofEpochMilli(epochMilli);
+        DateTimeFormatter f = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT);
+        return f.withLocale(lo).format(ZonedDateTime.ofInstant(ins, ZoneId.of(zoneId)));
+    }
+}
+```
+
+对上述方法进行调用，结果如下：
+
+```java
+2019年11月20日 上午8:15
+Nov 19, 2019, 7:15 PM
+```
+
+#### 10.7.4 小结
+
+处理日期和时间时，尽量使用新的`java.time`包；
+
+在数据库中存储时间戳时，尽量使用`long`型时间戳，它具有省空间，效率高，不依赖数据库的优点。
+
 ## 11 单元测试
 
 ### 11.1 编写JUnit测试
