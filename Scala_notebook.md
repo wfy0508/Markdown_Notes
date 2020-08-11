@@ -12827,3 +12827,473 @@ res6: Array[Int] = Array(2, 3, 4)
 ```
 
 有了Scala 2.12和Java 8，还可以从Java调用编译后的Scala方法，用Java的Lambda表达式传入Scala函数类型的值。虽然Scala的函数类型定义为包含具体方法的特质，Scala 2.12会将特质编译成带有默认方法的Java接口。这样，在Java看来，Scala的函数类型其实跟SAM没什么两样。
+
+## 32 Future和并发编程
+
+Java提供了围绕共享内存和锁构建的并发支持。虽然支持是完备的，这种并发方案实际过程中缺很难做到。Scala标准库提供了另一种能够规避这些难点的选择，将程序员的精力集中在不可变状态的异步变换上：也就是Future。
+
+虽然Java也提供了Future，它跟Scala的Future非常不同。两种Future都是用来表示某个异步计算的结果，但**Java的Future要求通过阻塞的get方法来访问这个结果**。虽然可以在调用get之前先调用isDone来判断某个Java的Future是否已经完成，从而避免阻塞，缺必须要等到Java的Future完成之后才能继续用这个结果做进一步计算。
+
+Scala的Future则不同，不论计算是否完成，都可以指定对它的变换逻辑。每一个变换都产生新的Future来表示原始的Future经过给定的函数变换后产生的异步结果。执行计算的线程由隐式给出的执行上下文决定。这使得可以将异步的计算描述成一系列对不可变值的变换，完全不需要考虑共享内存和锁。
+
+### 32.1 天堂里的烦恼
+
+在Java平台上，每个对象都关联了一个逻辑监视器，可以用来控制对数据的多线程访问。使用这种模式需要由你来界定哪些数据将被多个线程共享，并将访问共享数据或控制对这些共享数据访问的代码段标记为**synchronized**。Java运行时将运用一种锁的机制来确保同一时间只有一个线程进入有同一个锁控制的同步代码段，从而让你可以协同共享数据的多线程访问。
+
+为了兼容，Scala提供了Java并发原语的访问，可以使用Scala调用wait、notify和notifyAll等方法，它们的含义跟Java中的方法一样。从技术上讲，**Scala没有synchronized关键字，不过有一个synchorized方法**：
+
+```scala
+var counter = 0
+synchorized{
+  //这里每次都只有一个线程在执行
+  counter = counter + 1
+}
+```
+
+但是，程序员发现要使用共享数据和锁模型来有把握地构建健壮的、多线程的应用程序十分困难。这当中的问题，在程序中的没一点，都必须推断哪些正在修改或访问的数据可能会被其他线程修改或访问，以及在这一点上你握有哪些锁。每次方法调用，都必须推断出它将会尝试握有哪些锁，并说服自己它这样做不会产生死锁。而在推断中的这些锁，并不是编译器就固定下来，这让问题变得更加复杂，因为程序可以在运行时的执行过程中任意创建新的锁。
+
+更糟糕的是，对于多线程而言，测试是不可靠的，由于线程是非确定性的，可能测试1000次都是成功的，而程序第一次在客户的机器上运行就出现问题。对共享数据和锁，必须通过推断来把程序做对，没有其他方法。
+
+不仅如此，也无法通过过度的同步来解决问题，同步一切可能并不比什么都不同步更好。这中间额问题尽管是新的锁操作去掉了争用状况的可能，但同时增加了新的死锁的可能。一个正确的使用锁的程序既不能存在争用状况，也不能有死锁，因此不论往哪个方向做过头都是不安全的。
+
+java.util.concurrent类库提供了并发编程额更高级别的抽象。使用并发工具包进行多线程编程比你用低级别的同步语法制作自己的抽象可能会带来的问题要少的多。尽管如此，并发工具包也是基于共享数据和锁的，因此并没有从根本上解决使用这种模型的种种困难。
+
+### 32.2 异步执行和Try
+
+Scala的Future提供了一种可以减少（甚至免去）对共享数据和所进行推理的方式。当你调用Scala方法是，它“在你等待的过程中”，执行某项计算并返回结果。`如果结果是一个Future，那么这个Future就表示另一个将异步执行的计算，而该计算通常是由另一个不同的线程来完成的`。因此，`对Future的许多操作都需要一个隐式的执行上下文来提供异步执行的函数的策略`。如果试着通过Future.apply工厂方法创建一个future但又不提供隐式的执行上下文，编译器将抛出一个错误：
+
+```scala
+scala> import scala.concurrent.Future
+import scala.concurrent.Future
+
+scala> val fut = Future{Thread
+Thread   ThreadDeath   ThreadGroup   ThreadLocal
+
+scala> val fut = Future{Thread.sleep(10000); 21 + 21}
+<console>:12: error: Cannot find an implicit ExecutionContext. You might pass
+an (implicit ec: ExecutionContext) parameter to your method.
+
+The ExecutionContext is used to configure how and on which
+thread pools Futures will run, so the specific ExecutionContext
+that is selected is important.
+
+If your application does not define an ExecutionContext elsewhere,
+consider using Scala's global ExecutionContext by defining
+the following:
+
+implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
+       val fut = Future{Thread.sleep(10000); 21 + 21}
+                       ^
+```
+
+这个错误提示需要引入Scala提供的一个全局的执行上下文，对JVM而言，这个全局的执行上下文使用的是一个线程池。引入这个全局执行上下文之后，就可以正常创建Future了：
+
+```scala
+scala> import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.global
+
+scala> val fut = Future{Thread.sleep(10000); 21 + 21}
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+```
+
+创建完这个线程之后，需要等待10秒才能完成。Future有两个方法可以轮询fut是否完成和访问fut的返回值：`isCompleted`和`value`。
+
+如果是未完成：
+
+```scala
+scala> fut.isCompleted
+res0: Boolean = false
+
+scala> fut.value
+res1: Option[scala.util.Try[Int]] = None
+```
+
+如果是已完成：
+
+```scala
+scala> fut.isCompleted
+res2: Boolean = true
+
+scala> fut.value
+res3: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+这个value返回的可选值包含一个`Try`，如下继承关系，一个Try要么是包含类型为T的值的Success，要么是包含一个异常（java.lang.Throwable的实例）的Failure。Try的目的是为了异步计算提供一种与同步计算中返回try表达式类似的东西：**允许你处理那些计算有可能异常终止而不是返回结果的情况**。
+
+```plain txt
+        ┌─────────────────────┐
+        │     scala.util      │
+        │      Try[+T]        │
+        │ <<sealed abstract>> │
+        └─────────────────────┘
+                   ▲
+        ┌──────────┴─────────┐
+        │                    │
+┌────────────────┐   ┌─────────────────┐
+│   scala.util   │   │   scala.util    │
+│   Success[T]   │   │   Failure[T]    │
+│ <<final case>> │   │ <<final case>>  │
+└────────────────┘   └─────────────────┘
+```
+
+对于痛不而言，可以用try/catch来确保调用某个方法的线程可以捕获并处理由该方法抛出的异常。不过对于异步计算来说，发起该计算的线程通常都去转别的任务去了。在这之后如果异步计算因为某个异常失败了，原始的线程就不再能够用catch来处理这个异常。因此，当处理表示异步活动的Future时，就要用Try来处理这种情况：该活动未能交出某个结果，而是异常终止了。下面展示了异步活动失败场景的例子：
+
+```scala
+scala> val fut = Future { Thread.sleep(10000); 21 / 0 }
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> fut.value
+res4: Option[scala.util.Try[Int]] = None
+
+//当这个任务完成后：
+scala> fut.value
+res5: Option[scala.util.Try[Int]] = Some(Failure(java.lang.ArithmeticException: / by zero))
+```
+
+### 32.3 使用Future
+
+Scala的Future让你对Future的结果指定变换后得到一个新的*future*来表示这两个异步计算的组合：**原始计算和变换**。
+
+#### 32.3.1 用map对Future做变换
+
+可以直接将下一个计算**map**到当前的future，而不是阻塞（等待结果）然后继续做另一个计算。这样做的结果将会是一个新的future，表示原始的异步计算结果经过传给map的函数异步变换后的结果。例如：
+
+```scala
+val fut = Future { Thread.sleep(10000); 21 + 21 }
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+```
+
+会在10秒后完成，对这个future应设一个加1的函数将会交出意外一个future，这个新的future将表示由原始的加法和跟在后面的一次加1组成的计算：
+
+```scala
+scala> val result = fut.map(_ + 1)
+result: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> result.value
+res6: Option[scala.util.Try[Int]] = None
+```
+
+一旦fut完成，并且该函数被应用到其结果后，map方法返回的那个future也会完成：
+
+```scala
+scala> result.value
+res7: Option[scala.util.Try[Int]] = Some(Success(43))
+```
+
+#### 32.3.2 用for表达式对Future做变换
+
+由于Scala的Future还声明了flatMap方法，可以用for表达式来对future做变换：
+
+```scala
+scala> val fut1 = Future{ Thread.sleep(10000); 21 + 21 }
+fut1: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> val fut2 = Future{ Thread.sleep(10000); 23 + 23 }
+fut2: scala.concurrent.Future[Int] = Future(<not completed>)
+```
+
+有了这两个Future，可以得到一个新的表示它们结果的异步和新future，就像这样：
+
+```scala
+scala> for {
+     |   x <- fut1
+     |   y <- fut2
+     | } yield x + y
+res8: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> res8.value
+res9: Option[scala.util.Try[Int]] = Some(Success(88))
+```
+
+由于for表达式会串行化它们的变换（本例中给出的表啊是会被重写成一个对fut1.flatMap的调用，传入一个fut2.map的函数：`fut1.flatMap(x +. fut2.map(y => x + y))`），**如果不在for表达式之前创建future，它们就不会并行运行**。例如前面的for表达式需要大约10秒完成，下面的表达式至少需要20秒：
+
+```scala
+scala> for{
+     | x <- Future { Thread.sleep(10000); 21 + 21 }
+     | y <- Future { Thread.sleep(10000); 23 + 23 }
+     | } yield x + y
+res10: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> res10.value
+res11: Option[scala.util.Try[Int]] = Some(Success(88))
+```
+
+#### 32.3.3 创建Future
+
+除了之前创建future的apply方法之外，Future伴生对象还提供了三个创建依然完成的future的工厂方法：successful、failed和fromTry。这些工厂方法不需要ExecutionContext。
+
+**successful**方法创建一个已经完成的future：
+
+```scala
+scala> Future.successful{21 + 21}
+res12: scala.concurrent.Future[Int] = Future(Success(42))
+```
+
+**failed**方法创建一个已经失败的future：
+
+```scala
+scala> Future.failed{ new Exception("bummer!") }
+res13: scala.concurrent.Future[Nothing] = Future(Failure(java.lang.Exception: bummer!))
+```
+
+**fromTry**方法将从给定的Try创建一个已经完成的future：
+
+```scala
+scala> import scala.util.{Success, Failure}
+import scala.util.{Success, Failure}
+
+scala> Future.fromTry(Success {21 + 21})
+res14: scala.concurrent.Future[Int] = Future(Success(42))
+
+scala> Future.fromTry(Failure(new Exception("Bummer!")))
+res15: scala.concurrent.Future[Nothing] = Future(Failure(java.lang.Exception: Bummer!))
+```
+
+创建future最一般化的方式是使用**Promise**。给定一个promise，可以得到一个有这个promise控制的future。当你完成promise时，对应的future也会完成：
+
+```scala
+scala> import scala.concurrent.Promise
+import scala.concurrent.Promise
+
+scala> val pro = Promise[Int]
+pro: scala.concurrent.Promise[Int] = Future(<not completed>)
+
+scala> val fut = pro.future
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> fut.value
+res16: Option[scala.util.Try[Int]] = None
+```
+
+可以使用success、failure和complete的方法来完成promise。Promise的这些方法跟前面介绍的构造依然完成的future的方法很像，例如，success方法将成功地完成future：
+
+```scala
+scala> pro.success(42)
+res17: pro.type = Future(Success(42))
+
+scala> fut.value
+res18: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+`failure方法`接收一个会让future，因为它是失败的异常。complete方法接收一个Try。还有一个接收future的completeWith方法，这个方法使得该promise的future的完成状态跟你传入的future保持同步。
+
+#### 32.3.4 filter和collect
+
+Scala的future提供了两个方法：**filter**和**collect**，来确保某个future值保持某种性质。filter方法对future结果进行校验，如果合法就原样保留，这里有一个确保Int是正数的例子：
+
+```scala
+scala> val fut = Future(42)
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> val valid = fut.filter(res => res > 0)
+valid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> valid.value
+res19: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+如果future值非法，那么filter返回的这个future就会以NoSuchElementException失败：
+
+```scala
+scala> val invalid = fut.filter(res => res < 0)
+invalid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> invalid.value
+res20: Option[scala.util.Try[Int]] = Some(Failure(java.util.NoSuchElementException: Future.filter predicate is not satisfied))
+```
+
+由于Future还提供了withFilter方法，可以用for表达式的过滤器来执行同样的操作：
+
+```scala
+scala> val valid = for(res <- fut if res > 0) yield res
+valid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> valid.value
+res21: Option[scala.util.Try[Int]] = Some(Success(42))
+
+scala> val invalid = for (res <- fut if res < 0) yield res
+invalid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> invalid.value
+res22: Option[scala.util.Try[Int]] = Some(Failure(java.util.NoSuchElementException: Future.filter predicate is not satisfied))
+```
+
+Future的`collect方法`允许再一次操作中同时完成校验和变换。如果传给collect方法的偏函数对future结果有定义，那么collect返回的future就会以经过该函数变换后的值成功完成。
+
+```scala
+scala> val valid = fut collect { case res if res > 0 => res + 46 }
+valid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> valid.value
+res23: Option[scala.util.Try[Int]] = Some(Success(88))
+```
+
+而如果偏函数对future结果没有定义，那么collect返回的这个future就将以NoSuchElementException失败：
+
+```scala
+scala> val invalid = fut collect {case res if res < 0 => res + 46}
+invalid: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> invalid.value
+res24: Option[scala.util.Try[Int]] = Some(Failure(java.util.NoSuchElementException: Future.collect partial function is not defined at: 42))
+```
+
+#### 32.3.5 处理失败
+
+Scala的Future提供了处理失败的future的方式，包括failed、fallbackTo、recover和recoverWith。failed方法将任何类型的失败的future变换成一个成功的Future[Throwable]，带上引发失败的异常：
+
+```scala
+scala> val failure = Future{42 / 0}
+failure: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> failure.value
+res25: Option[scala.util.Try[Int]] = Some(Failure(java.lang.ArithmeticException: / by zero))
+
+scala> val expectedFailure = failure.failed
+expectedFailure: scala.concurrent.Future[Throwable] = Future(Success(java.lang.ArithmeticException: / by zero))
+
+scala> expectedFailure.value
+res26: Option[scala.util.Try[Throwable]] = Some(Success(java.lang.ArithmeticException: / by zero))
+```
+
+**如果被调用failed方法的future最终成功了，那么failed返回的这个future将NoSuchElementException失败**。因此failed方法只有在你预期某个future一定会失败的情况下才适用：
+
+```scala
+scala> val success = Future{42 / 1}
+success: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> success.value
+res27: Option[scala.util.Try[Int]] = Some(Success(42))
+
+scala> val unexpectedSuccess = success.failed
+unexpectedSuccess: scala.concurrent.Future[Throwable] = Future(Failure(java.util.NoSuchElementException: Future.failed not completed with a throwable.))
+
+scala> unexpectedSuccess.value
+res28: Option[scala.util.Try[Throwable]] = Some(Failure(java.util.NoSuchElementException: Future.failed not completed with a throwable.))
+```
+
+`fallbackTo方法`允许提供一个额外可选的future，这个future将用于在你调用fallbackTo的那个future失败的情况。以下是一个失败的future回退降级到另一个成功future的例子：
+
+```scala
+scala> val fallback = failure.fallbackTo(success)
+fallback: scala.concurrent.Future[Int] = Future(Success(42))
+
+scala> fallback.value
+res29: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+如果被调用fallbackTo方法的原始future失败了，那么传递给fallbackTo的future的失败（如果失败）会被忽略。fallbackTo返回这个future会以最初的异常失败：
+
+```scala
+scala> val failedFallback = failure.fallbackTo(Future {val res = 42; requir
+e(res < 0); res})
+failedFallback: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> failedFallback.value
+res30: Option[scala.util.Try[Int]] = Some(Failure(java.lang.ArithmeticException: / by zero))
+```
+
+`recover方法`让你可以把失败的future变换成成功的future，同时将成功的future结果原样透传。例如，对于一个以ArithmeticException失败的future，可以用recover方法将它变成成功的future，就像这样：
+
+```scala
+scala> val recovered = failedFallback recover{case ex: ArithmeticException
+=> -1}
+recovered: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> recovered.value
+res31: Option[scala.util.Try[Int]] = Some(Success(-1))
+```
+
+如果原始的future没有失败，那么recover返回的这个future就会以相同的值完成：
+
+```scala
+scala> val unrecovered = fallback recover{case ex: ArithmeticException => -
+1}
+unrecovered: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> unrecovered.value
+res32: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+这里有一个使用新的transform方法将失败变为成功的例子：
+
+```scala
+scala> val nonNegative = failure.transform{
+  case Success(res) => Success(res.abs + 1)
+  case Failure(_) => Success(0)
+}
+nonNegative: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> nonNegative.value
+res33: Option[scala.util.Try[Int]] = Some(Success(0))
+```
+
+#### 32.3.6 组合Future
+
+Future和它的伴生对象提供了用于组合多个future的方法。`zip方法`将两个成功的future变换成这两个值的元组的future：
+
+```scala
+scala> val zippedSuccess = success zip recovered
+zippedSuccess: scala.concurrent.Future[(Int, Int)] = Future(Success((42,-1)))
+
+scala> zippedSuccess.value
+res34: Option[scala.util.Try[(Int, Int)]] = Some(Success((42,-1)))
+```
+
+如果有任何一个future失败了，zip返回的这个future也会以相同的异常失败：
+
+```scala
+scala> val zippedFailure = success zip failure
+zippedFailure: scala.concurrent.Future[(Int, Int)] = Future(Failure(java.lang.ArithmeticException: / by zero))
+
+scala> zippedFailure.value
+res35: Option[scala.util.Try[(Int, Int)]] = Some(Failure(java.lang.ArithmeticException: / by zero))
+```
+
+如果两个future都失败了，那么最终失败的这个future将会包含头一个future的异常，也就是被调用zip方法的哪一个。
+
+Future的伴生对象提供了一个`fold方法`，用来累计一个TraversableOnce集合中所有future的结果，并交出一个future的结果，如果集合中所有的future都成功了，那么结果的future讲义累计的结果成功完成。而**如果集合中有任何future失败了，结果的future也将失败。如果有多个future失败了，结果的future将会跟第一个失败的future**（最先出现在TraversableOnce集合中的）相同的异常失败：
+
+```scala
+scala> val folded = Future.fold(futureNums)(0){(acc, num) => acc + num}
+
+folded: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> folded.value
+res36: Option[scala.util.Try[Int]] = Some(Success(88))
+```
+
+`Future.reduce方法`执行跟fold一样的折叠操作，只不过`不带零值`，而是用第一个future结果作为起始值：
+
+```scala
+scala> val reduced = Future.reduce(futureNums){(acc, num) => acc + num}
+
+reduced: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> reduced.value
+res37: Option[scala.util.Try[Int]] = Some(Success(88))
+```
+
+如果传一个空的集合给reduce，结果的future将以NoSuchElementException失败。
+
+`Future.sequence方法`将一个TraversableOnce的future集合变成一个由值组成的TraversableOnce的future。比如，下面用一个sequence将一个List[Future[Int]]变换成了一个Future[List[Int]]：
+
+```scala
+scala> val futureList = Future.sequence(futureNums)
+futureList: scala.concurrent.Future[List[Int]] = Future(<not completed>)
+
+scala> futureList.value
+res39: Option[scala.util.Try[List[Int]]] = Some(Success(List(42, 46)))
+```
+
+`Future.traverse方法`会将任何元素类型的TraversableOnce集合变换成一个由future组成的TraversableOnce，并将它“sequence”成一个由值组成的TraversableOnce的future。例如，将`List[Int]`就被Future.traverse变换成了`Future[List[Int]]`：
+
+```scala
+scala> val traversed = Future.traverse(List(1, 2, 3)) {i => Future(i)}
+traversed: scala.concurrent.Future[List[Int]] = Future(<not completed>)
+
+scala> traversed.value
+res40: Option[scala.util.Try[List[Int]]] = Some(Success(List(1, 2, 3)))
+```
+
+
