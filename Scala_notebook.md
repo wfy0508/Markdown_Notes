@@ -13296,4 +13296,182 @@ scala> traversed.value
 res40: Option[scala.util.Try[List[Int]]] = Some(Success(List(1, 2, 3)))
 ```
 
+#### 32.3.7 执行副作用
 
+有时候，可能想要在某个future完成后执行一个副作用。Future为此提佛那个了好几种方法。最基本的方法就是foreach，如果future完成就会执行一个副作用，future失败则不会执行：
+
+```scala
+scala> failure.foreach(ex => println(ex))
+
+scala> success.foreach(res => println(res))
+42
+```
+
+由于不带yield的for会被编译器重写成对foreach的调用，可以通过for表达式达成同样的效果：
+
+```scala
+scala> for (res <- failure) println(res)
+
+scala> for (res <- success) println(res)
+42
+```
+
+Future还提供两个方法来注册“回调（callback）”函数。`onComplete方法`最终成功或失败是会被执行。这个函数会被传入一个Try（如果future成功了就是一个包含结果的Success），如果失败就是一个包含造成失败的异常Failure。
+
+```scala
+scala> success onComplete{
+     | case Success(res) => println(res)
+     | case Failure(ex) => println(ex)
+     | }
+42
+
+scala> failure onComplete{
+     | case Success(res) => println(res)
+     | case Failure(ex) => println(ex)
+     | }
+java.lang.ArithmeticException: / by zero
+```
+
+Future并不保证通过onComplete注册的回调函数的任何执行顺序。如果想要强制回调函数的顺序，必须使用andThen。`andThen方法`会返回一个新的对原始的被调用andThen的future做镜像（随之成功或失败）的future，不过会执行完回调再完成：
+
+```scala
+scala> val newFuture = success andThen{
+     | case Success(res) => println(res)
+     | case Failure(ex) => println(ex)
+     | }
+newFuture: scala.concurrent.Future[Int] = Future(<not completed>)
+42
+
+scala> newFuture.value
+res48: Option[scala.util.Try[Int]] = Some(Success(42))
+```
+
+注意，如果传入andThen的回调函数在执行时抛出了异常，这个异常是不会被传到到后续回调或是通过结果的future报出来的。
+
+#### 32.3.8 Scala 2.12中添加的其他方法
+
+在Scala 2.12中添加的`flatten方法`将一个嵌套在另一个Future的Future变换成一个内嵌类型的Future。比如，flatten可以将一个`Future[Future[Int]]`变换成一个`Future[Int]`：
+
+```scala
+scala> val nestedFuture = Future{Future{42}}
+nestedFuture: scala.concurrent.Future[scala.concurrent.Future[Int]] = Future(<not completed>)
+
+scala> val flattened = nestedFuture.flatten
+flattened: scala.concurrent.Future[Int] = Future(Success(42))
+```
+
+Scala 2.12中添加的`zipWith方法`本质上将两个Future zip到一起，然后对结果的元组执行map。下面的例子就是两步处理，先zip再map：
+
+```scala
+scala> val futNum = Future{21 + 21}
+futNum: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> val futStr = Future{"ans" + "wer"}
+futStr: scala.concurrent.Future[String] = Future(<not completed>)
+
+scala> val zipped = futNum zip futStr
+zipped: scala.concurrent.Future[(Int, String)] = Future(Success((42,answer)))
+
+scala> val mapped = zipped map{
+     | case (num, str) => s"$num is the $str"
+     | }
+mapped: scala.concurrent.Future[String] = Future(<not completed>)
+
+scala> mapped.value
+res49: Option[scala.util.Try[String]] = Some(Success(42 is the answer))
+```
+
+zipWith允许你一步完成同样的操作：
+
+```scala
+scala> val fut = futNum.zipWith(futStr){
+     | case (num, str) => s"$num is the $str"
+     | }
+fut: scala.concurrent.Future[String] = Future(<not completed>)
+
+scala> fut.value
+res50: Option[scala.util.Try[String]] = Some(Success(42 is the answer))
+```
+
+Scala 2.12中还增加了一个`transformWith方法`，可以用一个Try到Future的函数对future进行变换。
+
+```scala
+scala> val flipped = success.transformWith{
+     | case Success(res) => Future{throw new Exception(res.toString)}
+     | case Failure(ex) => Future{21 + 21}
+     | }
+flipped: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> flipped.value
+res51: Option[scala.util.Try[Int]] = Some(Failure(java.lang.Exception: 42))
+```
+
+这个transformWith跟Scala 2.12中新增的重载transform方法类似。不过不想transform那样要求你传入的函数交出Try，transformWith允许交出future。
+
+### 32.4 测试Future
+
+Scala的future的一个优势是它们能帮你避免阻塞。在大所属JVM实现中，创建数千个钱程以后，在线程之间的上下文切换就会让性能变得无法接受。通过避免阻塞，可以保持一组有限数量的线程，让它们不停工作。尽管如此，Scala也允许你在需要的时候在一个future上阻塞（等待它的结果）。Scala的Await对象提供了等待结果的手段。参考下面的例子：
+
+```scala
+scala> import scala.concurrent.Await
+Await   Awaitable
+
+scala> import scala.concurrent.Await
+import scala.concurrent.Await
+
+scala> import scala.concurrent.duration._
+import scala.concurrent.duration._
+
+scala> val fut = Future{Thread.sleep(10000); 21 + 21}
+fut: scala.concurrent.Future[Int] = Future(<not completed>)
+
+scala> val x = Await.result(fut, 15.seconds)
+x: Int = 42
+```
+
+Await.result接收一个Future和一个Duration。这里的Duration用于表示Await.result应该等待多长时间让Future完成，如果到时间未完成则触发超时。在本例中，给Duration执行了15秒。因此Await.result方法不应该在future完成并得到最终结果42之前超时。
+
+阻塞被广泛接收的一个场景是对异步代码的测试。既然Await.result已经返回，就可以用这个结果来执行计算了，比如测试中会用到的断言：
+
+```scala
+scala> import org.scalatest.Matchers._
+
+scala> s should be (42)
+res0: org.scalatest.Assertion = Successed
+```
+
+或者也可以使用ScalaTest的ScalaFutures特质提供的阻塞结构。比如ScalaFuture为Future隐式添加的futureValue方法，会阻塞直到future完成，如果future失败了，futureValue就会抛出TestFailedException来描述这个问题。如果future成功了，futureValue将返回该future成功的结果，供你对这个结果执行断言：
+
+```scala
+scala> import org.scalatest.concurrent.ScalaFutures._
+import org.scalatest.concurrent.ScalaFutures._
+
+scala> val fut = Future { Thread.sleep(10000); 21 + 21 }
+fut: scala.concurrent.Future[Int] = ...
+
+scala> fut.futureValue should be (42) // futureValue blocks
+res1: org.scalatest.Assertion = Succeeded
+```
+
+虽然在测试中阻塞通常没什么问题，ScalaTest 3.0添加了“异步”测试的风格，可以以不阻塞的方式测试future。拿到future以后，并不是先阻塞然后对结果执行断言，而是将断言直接map到future上然后返回Future[Assertion]给ScalaTest。下面例子总，当这个future的断言完成时，ScalaTest会异步地将时间（测试成功、测试失败等）发送给报告程序。
+
+```scala
+import org.scalatest.AsyncFunSpec
+import scala.concurrent.Future
+
+class AddSpec extends AsyncFunSpec {
+  def addSoon(addends: Int*): Future[Int] = Future {
+    addends.sum
+  }
+
+  describe("addSoon") {it("will eventually compute a sum of passed Ints") {
+    val futureSum: Future[Int] = addSoon(1, 2)
+    // 可以将断言映射到Future，然后返回
+    // 得到的Future[Assertion]给ScalaTest
+    futureSum map { sum => assert(sum == 3)
+    }
+  }
+}
+```
+
+异步测试的用例展示了处理future的一般原则：一旦进入“future空间”，就尽量待在future空间里。不要对future阻塞拿到结果后再继续计算，而是通过执行一系列的变换，而每个变换都返回新的future供后续进一步变换处理来保持异步。需要从future空间拿到结果是，注册副作用，在future完成时异步执行。这种方式可以让你最大限度地利用线程。
