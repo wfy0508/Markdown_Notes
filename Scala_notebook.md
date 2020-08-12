@@ -13410,7 +13410,7 @@ res51: Option[scala.util.Try[Int]] = Some(Failure(java.lang.Exception: 42))
 
 ### 32.4 测试Future
 
-Scala的future的一个优势是它们能帮你避免阻塞。在大所属JVM实现中，创建数千个钱程以后，在线程之间的上下文切换就会让性能变得无法接受。通过避免阻塞，可以保持一组有限数量的线程，让它们不停工作。尽管如此，Scala也允许你在需要的时候在一个future上阻塞（等待它的结果）。Scala的Await对象提供了等待结果的手段。参考下面的例子：
+Scala的future的一个优势是它们能帮你避免阻塞。在大所属JVM实现中，创建数千个线程以后，在线程之间的上下文切换就会让性能变得无法接受。通过避免阻塞，可以保持一组有限数量的线程，让它们不停工作。尽管如此，Scala也允许你在需要的时候在一个future上阻塞（等待它的结果）。Scala的Await对象提供了等待结果的手段。参考下面的例子：
 
 ```scala
 scala> import scala.concurrent.Await
