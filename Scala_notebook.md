@@ -3845,7 +3845,7 @@ def showFruit(fruit: Fruit) = {
 }
 ```
 
-`showFruit`中`fruit`是`Fruit`类型，直接����������`fruit`的全部成员，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
+`showFruit`中`fruit`是`Fruit`类型，直接引入了其参数fruit（类型为Fruit）`的全部成员`，可以直接访问`name`和`color`，与`fruit.name`和`fruit.color`代表的含义相同。
 
 Scala灵活导入包的方式：
 
@@ -3896,7 +3896,7 @@ class Outer{
 
 #### 13.5.2 Protected成员
 
-在Scala中，对受保护成员的访问也比在Java中有更多的限制。在Scala中，`受保护成员只能从定义成员的类的子类中访问`。在Java中，这样的访问也可以来自同一个包中的其他类。
+在Scala中，对受保护成员的访问也比在Java中有更多的限制。在Scala中，`受保护成员只能从定义成员的类的子类中访问，同一个包中其他类不能调用`。在Java中，这样的访问也可以来自同一个包中的其他类。
 
 ```scala
 package p{
