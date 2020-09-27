@@ -7169,7 +7169,21 @@ val o2 = new Outer
 
 o1.Inner和o2.Inner是两个不同的路径依赖类型。
 
-与Java一样，在Scala中，内部类实例持有对外部类实例的引用。这允许内部类访问其外部类的成员。因此，如果不以某种方式指定外部类实例，就不能实例化内部类。一种方法是在外部类的主体中实例化内部类。在这种情况下，将使用当前的外部类实例(使用this引用)。
+与Java一样，在Scala中，`内部类实例持有对外部类实例的引用`。这允许内部类访问其外部类的成员。因此，如果不以某种方式指定外部类实例，就不能实例化内部类。一种方法是`在外部类的主体中实例化内部类`。在这种情况下，将使用当前的外部类实例(`使用this引用`)。
+
+```scala
+class ScalaOuterClass {
+  val name = "scott"
+  private val salary: Double = 10000.90
+
+  class ScalaInnerClass {
+    def info(): Unit = {
+      //内部类如果想要访问外部类的属性，可以通过外部类对象访问，方法为：外部类名.this.属性名
+      println("name" + ScalaOuterClass.this.name + "sal = " + ScalaOuterClass.this.salary)
+    }
+  }
+}
+```
 
 另一种方法是使用路径依赖类型。例如，因为类型为o1.Inner，命名一个特定的外部对象，你可以实例化它:
 
@@ -7627,7 +7641,7 @@ implicit def intToString(x: Int) = x.toString
 
 编译器只会在convert被标记为implicit时，才将x + y修改成convert(x) + y。
 
-`作用域规则：被插入的隐式转换必须是当前作用域的单个标识符，或者跟隐式转换的源类型或目标类型有关联`。Scala编译器只会考虑那些在作用域内的隐式转换。因此，必须以某种方式将隐式转换引入到当前作用域才能使用它们。不仅如此，`隐式转换在当前作用域必须是单个标识符`。编译器不会插入someVariable.convert这种形式的转换。如果想要someVariable.convert可用，必须引入它，成为单个标识符，引入后就可用。常见的做法是提供一个包含了一些有用隐式转换的Preamble对象。这样使用这个类库的代码就可以通过“import Preamble._”来访问该类库的隐式转换。
+`作用域规则：被插入的隐式转换必须是当前作用域的单个标识符，或者跟隐式转换的源类型或目标类型有关联`。Scala编译器只会考虑那些在作用域内的隐式转换。因此，必须以某种方式将隐式转换引入到当前作用域才能使用它们。不仅如此，`隐式转换在当前作用域必须是单个标识符`。编译器不会插入`someVariable.convert`这种形式的转换。如果想要`someVariable.convert`可用，必须引入它，成为单个标识符，引入后就可用。常见的做法是提供一个包含了一些有用隐式转换的Preamble对象。这样使用这个类库的代码就可以通过`import Preamble._`来访问该类库的隐式转换。
 
 此外，单标识符有个例外，`编译器还会在隐式转换的源类型或目标类型的伴生对象中查找隐式定义`。如果尝试将Dollar对象传给Euro，可以将一个从Dollar到Euro的隐式转换打包在Dollar或Euro任何一个类的伴生对象中：
 
@@ -7638,7 +7652,7 @@ object Dollar{
 class Dollar{...}
 ```
 
-作用于规则有助于模块化的推理，如果隐式转换是全局可用的，那么要理解某个代码的文件，就需要知道在程序的任何地方添加的每个隐式定义！
+**作用域规则有助于模块化的推理**，如果隐式转换是全局可用的，那么要理解某个代码的文件，就需要知道在程序的任何地方添加的每个隐式定义！
 
 `每一次规则：每次只能有一个隐式定义被插入`。编译器绝对不会将x + y重写为convert1(convert2(x)) + y。`如果编译器已经尝试某个隐式转换的过程当中，它不会在尝试另一个隐式转换的`。不过可以让隐式转换定义包含隐式参数的方式绕过这个限制。
 
@@ -7674,13 +7688,13 @@ Scala总共有三个地方会用到隐式转换：
 - 对某个（成员）选择接收端（即方法、方法调用等）的转换；
 - 隐式参数。
 
-到期望类型的转换可以在预期不同类型的上下文中使用（当前已持有）某个类型。例如，有一个String但想将它传给一个要求IndexSeq[Char]的方法，选择接收端的转换让我们适配方法调用的接收端（即方法调用的对象），如果原始类型不支持这个调用，例如“abc”.exists，这段代码会被转换为stringWrapper("abc").exists，因为exists在String上不可用，但是在IndexSeq[Char]可用。
+到期望类型的转换可以在预期不同类型的上下文中使用（当前已持有）某个类型。例如，有一个String但想将它传给一个要求IndexSeq[Char]的方法，选择接收端的转换让我们适配方法调用的接收端（即方法调用的对象），如果原始类型不支持这个调用，例如`"abc".exists`，这段代码会被转换为`stringWrapper("abc").exists`，因为exists在String上不可用，但是在IndexSeq[Char]可用。
 
 隐式参数通常用来给调用的函数提供更多关于调用者诉求的信息。隐式参数对于泛型函数尤其有用。
 
 ### 21.3 隐式转换到一个预期的类型
 
-转换到预期的类型，就是每当编译器看见一个X而它需要一个Y的时候，他就会查找一个能将X转换为Y的隐式转换。通常一个浮点型不能被用作整数，因为这样会丢失精度：
+转换到预期的类型，就是每当编译器看见一个X而它需要一个Y的时候，它就会查找一个能将X转换为Y的隐式转换。通常一个浮点型不能被用作整数，因为这样会丢失精度：
 
 ```scala
 scala> val i: Int = 3.5
@@ -7725,13 +7739,16 @@ implicit def int2double(x: Int): Double = x.Double
 
 ### 21.4 转换接收端
 
-隐式转换还能应用于方法调用的接收端，也就是被调用的那个对象。这种隐式转换有两个主要用途。首先，接收端转换允许我们更平滑将心累集成到已有的类继承关系图谱中，其次它们支持在语言中编写（原生的）领域特定语言（DSL）。
+隐式转换还能应用于方法调用的接收端，也就是被调用的那个对象。这种隐式转换有两个主要用途。
 
-如果我们写下obj.doIt，但是obj并没有doIt成员，编译器会在放弃之前尝试插入转换。这个转换需要应用到接收端，也就是obj，编译器会装作obj的预期“类型”为拥有名为doIt的成员，这个拥有名为doIt的成员类型并不是一个普通的Scala类型，从概念上讲它是不存在的，这就是为什么编译器选择在这种情况下插入一个隐式转换。
+- 首先，接收端转换允许我们更平滑将心累集成到已有的类继承关系图谱中；
+- 其次，它们支持在语言中编写（原生的）领域特定语言（DSL）。
+
+如果我们写下`obj.doIt`，但是obj并没有doIt成员，编译器会在放弃之前尝试插入转换。这个转换需要应用到接收端，也就是obj，编译器会装作obj的预期“类型”为拥有名为doIt的成员，这个拥有名为doIt的成员类型并不是一个普通的Scala类型，从概念上讲它是不存在的，这就是为什么编译器选择在这种情况下插入一个隐式转换。
 
 #### 21.4.1 与新类型互操作
 
-接收端转换的一个主要用途就是让心类型和已有类型的继承更加顺滑。尤其是这些转换使得我们可以让使用方程序员像使用新类型那样使用已有的类型，以Rational为例：
+接收端转换的一个主要用途就是**让新类型和已有类型的继承更加顺滑**。尤其是这些转换使得我们可以让使用方程序员像使用新类型那样使用已有的类型，以Rational为例：
 
 ```scala
 class Rational(n: Int, d: Int){
@@ -7783,11 +7800,11 @@ object Predef{
 }
 ```
 
-这个“富包装类”模式再给变成怨言提供类语法(syntax-like)的扩展的类库中十分常见。只要你看见有人调用了接收类中不存在的方法，那么很可能使用了隐式转换。
+这个“富包装类”模式再提供类语法(syntax-like)的扩展的类库中十分常见。只要你看见有人调用了接收类中不存在的方法，那么很可能使用了隐式转换。
 
 #### 21.4.3 隐式类
 
-Scala 2.10引入了隐式类来建华富包装类的编写。隐式类以implicit开头，对于这样的类，编译器会生成一个从类的构造方法参数到类本身的隐式转换。如果打算用这个类来实现富包装类模式，这个转换真是你想要的。
+Scala 2.10引入了隐式类来简化富包装类的编写。隐式类以implicit开头，对于这样的类，编译器会生成一个从类的构造方法参数到类本身的隐式转换。如果打算用这个类来实现富包装类模式，那么它正是你所需要的。
 
 如果有一个名为Rectangle的类用来表示屏幕上一个长方形的宽和高：
 
@@ -7820,11 +7837,11 @@ myRectangle: Rectangle = Rectangle(3,4)
 
 因为Int类型并没有名为`x`的方法，编译器会查找一个从Int到某个有这个方法的类型的隐式转换。它将找到自动生成的这个RectangleMaker的转换。
 
-注意：`implicit不能用在样例类(case class)上，并且其构造方法必须有且仅有一个参数`。不仅如此，隐式类必须存在与另一个对象、类和特质里。在实际应用中，只要是隐式类作为富包装类来给某个已有的类添加方法，这些限制应该都不是问题。
+**注意**：`implicit不能用在样例类(case class)上，并且其构造方法必须有且仅有一个参数`。不仅如此，隐式类必须存在于另一个对象、类和特质里。在实际应用中，只要是隐式类作为富包装类来给某个已有的类添加方法，这些限制应该都不是问题。
 
 ### 21.5 隐式参数
 
-编译器有时将someCall(a)替换为someCall(a)(b)，或者将new Some(a)替换为new Some(a)(b)，通过追加一个参数列表的方式来完成某个函数调用。隐式参数提供的是整个最后一组柯里化的参数列表，而不仅仅是最后一个参数。如果someCall缺失的最后一个参数列表接收三个参数，那么编译器会将someCall(a)替换成someCall(a)(b, c, d)，就这个用法而言，b,c,d三个参数还必须定义为implicit。
+编译器有时将`someCall(a)`替换为`someCall(a)(b)`，或者将`new Some(a)`替换为`new Some(a)(b)`，通过追加一个参数列表的方式来完成某个函数调用。隐式参数提供的是整个最后一组柯里化的参数列表，而不仅仅是最后一个参数。如果someCall缺失的最后一个参数列表接收三个参数，那么编译器会将`someCall(a)`替换成`someCall(a)(b, c, d)`，就这个用法而言，**b,c,d三个参数还必须定义为implicit**。
 
 假如有一个PreferredPrompt类，封装了一个用户偏好的命令行提示字符串($或者>)：
 
@@ -7832,7 +7849,7 @@ myRectangle: Rectangle = Rectangle(3,4)
 class PreferredPrompt(val preference: String)
 ```
 
-同时，假如有一个带有greet的Greeter对象，greet接收两个参数列表，第一个参数列表接收一个字符创作为用户名，而第二个参数列表接收一个PreferredPrompt：
+同时，假如有一个带有greet方法的Greeter对象，greet接收两个参数列表，第一个参数列表接收一个字符创作为用户名，而第二个参数列表接收一个PreferredPrompt：
 
 ```scala
 object Greeter{
@@ -7889,6 +7906,7 @@ class PreferredPrompt(val preference: String)
 class PreferredDrink(val preference: String)
 
 object Greeter{
+  // prompt和drink都是隐式参数
   def greet(name: String)(implicit prompt: PreferredPrompt, drink: PreferredDrink) = {
     println("Welcome, " + name + ". The system is ready.")
     println("But while you work, ")
@@ -7949,7 +7967,7 @@ def maxListOrdering[T](elements: List[T])(ordering: Ordering[T]): T = elements m
 
 maxListOrdering除了接收一个List[T]作为入参，还接收一个额外的类型为Ordering[T]的入参，这个额外的参数是给出在比较T类型元素是应该使用的顺序。
 
-这个定义更加通用，但是也比较麻烦，现在调用者必须显式地给出排序，哪怕是当T为Int或者String这样有明确的默认排序的时候。为了让新的方法哼方便使用，可以将第二个参数标记为隐式：
+这个定义更加通用，但是也比较麻烦，现在调用者必须显式地给出排序，哪怕是当T为Int或者String这样有明确的默认排序的时候。为了让新的方法更方便使用，可以将第二个参数标记为隐式：
 
 ```scala
 def maxListImpParm[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
@@ -7961,7 +7979,7 @@ def maxListImpParm[T](elements: List[T])(implicit ordering: Ordering[T]): T = el
 }
 ```
 
-maxListImpParm函数是一个隐式参数用来提供关于在更靠前的参数列表中已经显式提到的类型的更多信息的例子。确切地说，类型为Ordering[T]的隐式参数ordering提供了更多关于类型T的信息。类型T在elements参数的类型List[T]中提到过，这是一个更靠前的参数列表中的参数。由于在任何maxListImpParm调用中elements都必须显式地给出，编译器在编译时就知道T是什么，因此就可以确定类型为Ordering[T]的隐式定义是否可用。
+maxListImpParm函数是一个隐式参数，用来提供关于在更靠前的参数列表中已经显式提到的类型的更多信息的例子。确切地说，类型为Ordering[T]的隐式参数ordering提供了更多关于类型T的信息。类型T在elements参数的类型List[T]中提到过，这是一个更靠前的参数列表中的参数。在任何maxListImpParm调用中elements都必须显式地给出，编译器在编译时就知道T是什么，因此就可以确定类型为Ordering[T]的隐式定义是否可用。
 
 实际使用如下：
 
@@ -7984,11 +8002,11 @@ res8: String = Two
 def maxListPoorStyle[T](elements: List[T])(implicit orderer: (T, T) => Boolean): T
 ```
 
-不过对于使用方而言，这个版本的函数需要提供类型为(T, T) => Boolean的参数orderer，这是一个相当泛化的类型。涵盖了所有从两个T到Boolean的函数。
+不过对于使用方而言，这个版本的函数需要提供类型为`(T, T) => Boolean`的参数orderer，这是一个相当泛化的类型。涵盖了所有从两个T到Boolean的函数。
 
 ### 21.6 上下文界定
 
-使用implicit时，编译器不仅会尝试给这个参数`提供`一个隐式值，还会吧这个参数当做一个可以在方法体中`使用`的隐式定义！也就是说，可以省去方法体中对ordering的第一次使用。
+使用implicit时，编译器不仅会尝试给这个参数`提供`一个隐式值，还会把这个参数当做一个可以在方法体中`使用`的隐式定义！也就是说，可以省去方法体中对ordering的第一次使用。
 
 ```scala
 def maxList[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
@@ -8000,13 +8018,13 @@ def maxList[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements 
 }
 ```
 
-还有一种方法可以去掉对ordering的第二次使用，者设计标准库中定义的如下方法：
+还有一种方法可以去掉对ordering的第二次使用，这涉及标准库中定义的如下方法：
 
 ```scala
 def implicitly[T](implicit t: T) = t
 ```
 
-调用implicitly[Foo]的作用是编译器查找一个类型为Foo的隐式定义，然后会用这个对象来调用implicitly方法。这个方法再将这个对象返回。这样就可以在想要当前作用域找到类型为Foo的隐式对象时直接写implicitly[Foo]。下面展示了implicitly[Ordering[T]]来通过其类型获取ordering参数的用法。
+调用`implicitly[Foo]`的作用，是编译器查找一个类型为Foo的隐式定义，然后会用这个对象来调用implicitly方法。这个方法再将这个对象返回。这样就可以在想要当前作用域找到类型为Foo的隐式对象时直接写implicitly[Foo]。下面展示了implicitly[Ordering[T]]来通过其类型获取ordering参数的用法。
 
 ```scala
 def maxList[T](elements: List[T])(implicit ordering: Ordering[T]): T = elements match{
@@ -8065,7 +8083,7 @@ Note that implicit conversions are not applicable because they are ambiguous:
 
 这里有两个隐式转换，编译器拒绝插入转换。
 
-Scala 2.8以后规定，如果可用的转换当中有某个转换严格来说比其他更具体，那么编译器就会选择哪个更具体的转换。比如一个接收String，另外一个接收Any，由于String是Any的子类，且比Any更具体，编译器会选择String的版本。
+Scala 2.8以后规定，**如果可用的转换当中有某个转换严格来说比其他的转换更具体，那么编译器就会选择哪个更具体的转换**。比如一个接收String，另外一个接收Any，由于String是Any的子类，且比Any更具体，编译器会选择String的版本。
 
 更确切地说，当满足下面任意一条时，就说一条比另一条具体：
 
@@ -11568,7 +11586,7 @@ object SimpleBrowser{
 SimpleDatabase.allRecipes.filter(recipe =>...
 ```
 
-所以并不能在不修改和重新编译浏览器模块的情况下插入数据库模块的不同实现。而且，尽管SimpleDatabase模块没有指向SimpleBrowser模块的硬链接，目前也没有什么清晰的方式能够吧应用层配置成使用不同的浏览器模块实现。
+所以并不能在不修改和重新编译浏览器模块的情况下插入数据库模块的不同实现。而且，尽管SimpleDatabase模块没有指向SimpleBrowser模块的硬链接，目前也没有什么清晰的方式能够把应用层配置成使用不同的浏览器模块实现。
 
 不过，当把这些模块模块变得更加可插拔的时候，很重要的一点就是避免了代码重复，因为可能有大量的代码可以在相同模块的不同实现之间共享。`如果模块是对象，那么模块的就是类`。就好比类描述了所有实例的公共部分一样，类也可以描述模块中它所有可能的配置中的公共部分。
 
@@ -11759,7 +11777,7 @@ scala> SimpleBrowser.displayCategory(category)
                                      ^
 ```
 
-如果想让两者个FoodCategory是同一个，可以吧FoodCategory定义移到类或者特质之外。有的时候两个类型相同，但是编译器却不能鉴别出来，你会看到编译器抛出的错误信息提示两个类型不同，虽然你知道它们是完全一致的。
+如果想让两者个FoodCategory是同一个，可以把FoodCategory定义移到类或者特质之外。有的时候两个类型相同，但是编译器却不能鉴别出来，你会看到编译器抛出的错误信息提示两个类型不同，虽然你知道它们是完全一致的。
 
 在这种情况下，使用**单例类型**来解决问题。例如在GoApples程序中，类型检查不知道db和browser.database是同一个类型，因此当你尝试在两个对象之间传递类目消息时：
 
