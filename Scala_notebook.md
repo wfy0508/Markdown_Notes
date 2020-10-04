@@ -6133,7 +6133,7 @@ res8: Thermometer = 100.0F/37.77778C
 
 类型参数化让我们能够编写泛型和注解。与Java不同，`Scala并不允许原生类型，Scala要求我们给出类型参数`，**型变定义了参数化类型的继承关系**，以Set[String]为例，型变定义了它是不是Set[AnyRef]的子类型。
 
-### 19.1 函数时队列
+### 19.1 函数式队列
 
 函数式队列是一种数据结构，它支持三种操作：
 
@@ -8987,7 +8987,7 @@ Scala自带一个强大而优雅的集合类库，尽管这些集合API看上去
 
 ### 24.1 可变与不可变集合
 
-所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找��。大��数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
+所有的集合类都可以在scala.collection包或它的子包mutable、immutable和generic中找到。大多数使用的集合类都分为三个变种。这三个变种分别位于scala.collection包、scala.collection.immutable，以及scala.collection.mutable中。
 
 - scala.collection.immutable包中的集合对所有人都是不可变的，无论怎么访问都会交出相同元素的集合。
 
